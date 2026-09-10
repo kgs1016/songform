@@ -1,0 +1,1464 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1114">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>콘티</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1114; --card: #1a1d22; --line: #2b3038; --text: #f2f4f7; --muted: #9aa3ad;
+    --accent: #4f8bff; --accent-soft: #1b2a47; --red: #ff5252; --red-soft: #3a1c1c;
+    --danger: #ff6b6b; --warn: #f0a03a; --radius: 14px; --tap: 48px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 16px; line-height: 1.4;
+    overscroll-behavior-y: none;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: none; background: none; padding: 0; }
+  input[type=text], input[type=date], input[type=number] {
+    width: 100%; min-height: var(--tap); padding: 10px 14px; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--card); font-size: 17px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  #app { max-width: 640px; margin: 0 auto; min-height: 100%; padding-bottom: calc(96px + var(--safe-b)); }
+
+  /* 상단 바 */
+  .top {
+    position: sticky; top: 0; z-index: 10; background: rgba(15,17,20,.92); backdrop-filter: blur(8px);
+    display: flex; align-items: center; gap: 6px; padding: 10px 12px; min-height: 58px;
+  }
+  .top h1 { flex: 1; margin: 0; font-size: 19px; font-weight: 700; text-align: center; letter-spacing: -.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top .icon { width: var(--tap); height: var(--tap); border-radius: 12px; display: grid; place-items: center; font-size: 20px; color: var(--accent); font-weight: 700; }
+  .top .icon:active { background: var(--accent-soft); }
+  .top .icon.ghost { visibility: hidden; }
+
+  .wrap { padding: 4px 14px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+  .card.tap:active { background: #22262d; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; min-width: 0; }
+  .ellip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; line-height: 1.7; }
+  .empty b { color: var(--text); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: var(--tap); padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 16px;
+    background: var(--card); border: 1px solid var(--line);
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.soft { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .btn.danger { color: var(--danger); }
+  .btn.block { width: 100%; }
+  .btn.sm { min-height: 38px; padding: 0 12px; font-size: 14px; }
+  .btn:disabled { opacity: .45; }
+
+  /* 홈 */
+  .month-nav { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 0 12px; }
+  .month-nav .icon { width: var(--tap); height: var(--tap); font-size: 22px; color: var(--accent); }
+  .month-nav .label { font-size: 22px; font-weight: 800; min-width: 150px; text-align: center; }
+  .week-card .date { font-size: 18px; font-weight: 800; }
+  .week-card .songs { margin: 6px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 14px; }
+  .week-card .songs li { display: flex; gap: 8px; padding: 2px 0; }
+  .week-card .songs li .n { color: var(--accent); font-weight: 700; width: 16px; }
+  .week-card .time { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .week-card .time.over { color: var(--warn); font-weight: 700; }
+
+  /* 주차 */
+  .entry { display: flex; gap: 12px; align-items: center; padding: 12px 14px; }
+  .entry .thumb { width: 54px; height: 70px; border-radius: 8px; border: 1px solid var(--line); background: #fff center/cover no-repeat; flex: none; }
+  .entry .title { font-weight: 700; font-size: 16px; }
+  .entry .form { font-size: 13px; margin-top: 3px; word-break: break-all; }
+  .entry .form .r { color: var(--red); }
+  .entry .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .entry .ctl { display: flex; flex-direction: column; gap: 2px; }
+  .entry .ctl button { width: 40px; height: 32px; border-radius: 8px; color: var(--muted); font-size: 15px; }
+  .entry .ctl button:active { background: var(--bg); }
+  .target-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px 10px; font-size: 14px; color: var(--muted); }
+  .target-row b { color: var(--text); }
+  .target-row .over { color: var(--warn); }
+  .target-row button { color: var(--accent); font-weight: 700; padding: 6px 8px; }
+
+  /* 하단 고정 바 */
+  .bottom {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 10px 14px calc(10px + var(--safe-b)); background: rgba(15,17,20,.96);
+    border-top: 1px solid var(--line); backdrop-filter: blur(8px);
+  }
+  .bottom .inner { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; }
+  .bottom .btn { flex: 1; }
+
+  /* 곡 편집 */
+  .stage { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage canvas { display: block; width: 100%; height: auto; }
+  .stage .hint { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 10px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45); text-align: center; pointer-events: none; }
+  .stage.label-mode { outline: 3px solid var(--red); outline-offset: -3px; }
+  .pages { display: flex; gap: 6px; justify-content: center; margin: 8px 0 4px; }
+  .pages button { min-width: 40px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-weight: 700; font-size: 14px; }
+  .pages button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pages button.add { color: var(--accent); }
+  .tools { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; flex-wrap: wrap; }
+  .tools .btn { flex: 1; min-width: 0; }
+  .tools .btn.on { background: var(--red); color: #fff; border-color: var(--red); }
+  .slider { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .slider input { flex: 1; accent-color: var(--accent); }
+  .label-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .label-picker button { min-width: 44px; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid #5a2a2a; background: var(--red-soft); color: var(--red); font-weight: 700; }
+  .label-picker button.on { background: var(--red); color: #fff; }
+
+  .section { margin-top: 18px; }
+  .section h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 700; letter-spacing: .2px; }
+  .section h3 .right { float: right; font-weight: 700; color: var(--accent); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; min-height: 46px; padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 2px; height: 38px; padding: 0 14px; border-radius: 999px;
+    background: #262b33; font-weight: 700; font-size: 15px; border: 2px solid transparent;
+  }
+  .chip.r { background: var(--red-soft); color: var(--red); }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); }
+  .chip.r.on { border-color: var(--red); }
+  .chip .rep { font-size: 12px; opacity: .75; margin-left: 2px; }
+  .chip-empty { color: var(--muted); font-size: 14px; padding: 6px 4px; }
+  .chip-tools { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .chip-tools .btn { flex: 1; min-width: 56px; }
+
+  .blocks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .blocks button {
+    min-height: 56px; border-radius: 12px; background: var(--card); border: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  }
+  .blocks button b { font-size: 17px; }
+  .blocks button span { font-size: 11px; color: var(--muted); }
+  .blocks button.r b { color: var(--red); }
+  .blocks button:active { background: var(--accent-soft); }
+  .blocks button.more { color: var(--accent); font-weight: 700; }
+
+  .field { margin-top: 10px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .seg { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .seg button { flex: 1; min-height: var(--tap); font-weight: 700; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* 시트(모달) */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { width: 100%; max-width: 640px; background: var(--card); border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + var(--safe-b)); max-height: 88vh; overflow: auto; animation: up .18s ease-out; }
+  @keyframes up { from { transform: translateY(40px); opacity: 0 } }
+  .sheet h2 { margin: 0 0 14px; font-size: 19px; }
+  .sheet .list button { width: 100%; min-height: 56px; text-align: left; padding: 0 12px; border-radius: 12px; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+  .sheet .list button:active { background: var(--accent-soft); }
+  .sheet .list button .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); display: grid; place-items: center; font-size: 18px; }
+  .sheet .list button.danger { color: var(--danger); }
+  .sheet .list button.danger .ic { background: var(--red-soft); }
+  .sheet .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .sheet .actions .btn { flex: 1; }
+  .lib-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  .lib-item .thumb { width: 44px; height: 56px; border-radius: 6px; border: 1px solid var(--line); background: #fff center/cover no-repeat; flex: none; }
+  .lib-item .t { font-weight: 700; }
+  .lib-item .f { font-size: 12px; color: var(--muted); }
+  .lib-item:active { background: var(--accent-soft); }
+
+  .r { color: var(--red); }
+  .thumbs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; }
+  .thumbs .th { width: 46px; height: 60px; flex: none; border-radius: 6px; border: 1px solid var(--line); background: #fff center/cover no-repeat; }
+  .seg.mini button { min-height: 34px; font-size: 13px; }
+  .mini-row { display: grid; grid-template-columns: 1.1fr .9fr 1.2fr; gap: 6px; margin-top: 8px; }
+  .sw-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .sw-row .thumb { width: 44px; height: 56px; border-radius: 6px; border: 1px solid var(--line); background: #fff center/cover no-repeat; flex: none; }
+  .sw-row .t { font-weight: 700; }
+  .sw-row .f { font-size: 12px; word-break: break-all; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(110px + var(--safe-b)); transform: translateX(-50%) translateY(10px); background: #2b3038; color: #fff; border: 1px solid #3a4049; padding: 12px 18px; border-radius: 12px; font-size: 15px; opacity: 0; pointer-events: none; transition: .18s; z-index: 100; max-width: 88vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .toast.err { background: var(--danger); }
+
+  #print { display: none; }
+  @media print {
+    body { background: #fff; }
+    body > *:not(#print) { display: none !important; }
+    #print { display: block; }
+    #print img { display: block; width: 100%; max-height: 98vh; object-fit: contain; page-break-after: always; break-after: page; }
+    #print img:last-child { page-break-after: auto; break-after: auto; }
+    @page { margin: 8mm; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<div id="print"></div>
+<input id="filePick" type="file" accept="image/*" multiple hidden>
+
+<script>
+'use strict';
+
+// ────────────────────────────── 공통 유틸 ──────────────────────────────
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const h = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let toastTimer;
+function toast(msg, err = false) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.className = 'toast'), err ? 3800 : 2000);
+}
+
+const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function fmtDate(iso, withDay = true) {
+  if (!iso) return '날짜 없음';
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${m}월 ${d}일` + (withDay ? ` (${DAYS[dt.getDay()]})` : '');
+}
+const toISO = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+const monthOf = (iso) => (iso || '').slice(0, 7);
+// 교회에서 부르는 식: 9월 둘째 일요일 → "9월 2주차"
+function weekTitle(w) {
+  if (!w.date) return '날짜 없음';
+  const [, m, d] = w.date.split('-').map(Number);
+  return `${m}월 ${Math.ceil(d / 7)}주차`;
+}
+// 사진 앱이 붙인 이름(KakaoTalk_2026…, IMG_0123)은 곡 제목이 아니다
+const looksLikeCameraName = (t) => !/[가-힣]/.test(t) || /kakaotalk|img|dsc|screenshot|photo/i.test(t);
+function nextSunday(from = new Date()) {
+  const d = new Date(from);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+  return d;
+}
+function fmtDur(sec) {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  if (m === 0) return `약 ${s}초`;
+  return s < 15 ? `약 ${m}분` : s < 45 ? `약 ${m}분 30초` : `약 ${m + 1}분`;
+}
+
+// ────────────────────────────── 송폼 표기 ──────────────────────────────
+// 표기 규칙은 실제 콘티에서 쓰는 그대로: Vx2-Cx2-inter(4마디)-V-Cx2
+const INSTRUMENTAL = ['intro', 'inter', 'outro', 'ending', '전주', '간주', '후주', '엔딩'];
+const isInst = (name) => INSTRUMENTAL.some((p) => (name || '').toLowerCase().startsWith(p));
+
+function parseForm(text) {
+  return (text || '').split('-').map((t) => t.trim()).filter(Boolean).map((token) => {
+    let s = token, note = '', repeat = 1;
+    const nm = s.match(/\(([^)]*)\)\s*$/);
+    if (nm) { note = nm[1].trim(); s = s.slice(0, nm.index).trim(); }
+    const rm = s.match(/x(\d+)\s*$/i);
+    if (rm && s.slice(0, rm.index).trim()) { repeat = parseInt(rm[1], 10); s = s.slice(0, rm.index).trim(); }
+    return { name: s, repeat: clamp(repeat, 1, 9), note };
+  });
+}
+const blockText = (b) => b.name + (b.repeat > 1 ? `x${b.repeat}` : '') + (b.note ? `(${b.note})` : '');
+const serializeForm = (blocks) => blocks.map(blockText).join('-');
+function formHtml(text) {
+  return parseForm(text).map((b) => `<span class="${isInst(b.name) ? 'r' : ''}">${h(blockText(b))}</span>`).join('-');
+}
+
+// 블록 종류 → 대략적인 연주시간. BPM·마디수를 안 물어보는 대신 평균값으로 어림한다.
+function blockKind(name) {
+  const n = (name || '').toLowerCase();
+  if (isInst(n)) return 'inst';
+  if (/^(p\.?c|pre)/.test(n)) return 'pre';
+  if (/^(v|verse|\d?절|a$)/.test(n)) return 'verse';
+  if (/^(c|chorus|후렴)/.test(n)) return 'chorus';
+  if (/^(b|bridge|브릿지|브리지)/.test(n)) return 'bridge';
+  return 'other';
+}
+const BLOCK_SECS = {
+  fast: { verse: 28, chorus: 24, pre: 12, bridge: 20, inst: 10, other: 26 },
+  mid:  { verse: 36, chorus: 30, pre: 15, bridge: 25, inst: 13, other: 32 },
+  slow: { verse: 46, chorus: 38, pre: 20, bridge: 32, inst: 17, other: 40 },
+};
+function estimateSecs(form, tempo = 'mid') {
+  const table = BLOCK_SECS[tempo] || BLOCK_SECS.mid;
+  return parseForm(form).reduce((sum, b) => sum + table[blockKind(b.name)] * b.repeat, 0);
+}
+
+// ── 추천: 질문 3~4개로 초안을 만든다 ──
+function mergeAdjacent(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    const last = out[out.length - 1];
+    if (last && last.name === b.name && !b.note && !last.note) last.repeat = clamp(last.repeat + b.repeat, 1, 9);
+    else out.push({ ...b });
+  }
+  return out;
+}
+function suggestForm({ verses = 2, bridge = true, tempo = 'mid', minutes = 4 }) {
+  let blocks = [{ name: 'Intro', repeat: 1, note: '' }];
+  for (let i = 1; i <= verses; i++) {
+    blocks.push({ name: verses === 1 ? 'V' : `V${i}`, repeat: 1, note: '' });
+    blocks.push({ name: 'C', repeat: 1, note: '' });
+  }
+  if (bridge) { blocks.push({ name: 'B', repeat: 1, note: '' }); blocks.push({ name: 'C', repeat: 2, note: '' }); }
+  else blocks[blocks.length - 1].repeat = 2;
+  blocks.push({ name: 'outro', repeat: 1, note: '' });
+  blocks = mergeAdjacent(blocks);
+
+  const target = minutes * 60;
+  const secs = (bs) => estimateSecs(serializeForm(bs), tempo);
+  const clone = (bs) => bs.map((b) => ({ ...b }));
+  const candidates = [clone(blocks)];
+  const lastChorus = (bs) => [...bs].reverse().find((b) => b.name === 'C');
+
+  if (secs(blocks) > target) {
+    for (let guard = 0; guard < 20 && secs(blocks) > target; guard++) {
+      const rep = blocks.filter((b) => b.repeat > 1).sort((a, b) => b.repeat - a.repeat)[0];
+      if (rep) rep.repeat -= 1;
+      else if (blocks.some((b) => b.name === 'B')) blocks = blocks.filter((b) => b.name !== 'B');
+      else {
+        // 마지막 절·후렴 한 쌍을 뺀다 (절이 2개 이상일 때만)
+        const vIdx = blocks.map((b, i) => (blockKind(b.name) === 'verse' ? i : -1)).filter((i) => i >= 0);
+        if (vIdx.length < 2) break;
+        const i = vIdx[vIdx.length - 1];
+        blocks.splice(i, blocks[i + 1] && blocks[i + 1].name === 'C' ? 2 : 1);
+      }
+      blocks = mergeAdjacent(blocks);
+      candidates.push(clone(blocks));
+    }
+  } else {
+    for (let guard = 0; guard < 20 && secs(blocks) < target; guard++) {
+      const lc = lastChorus(blocks);
+      const br = blocks.find((b) => b.name === 'B');
+      const firstC = blocks.findIndex((b) => b.name === 'C');
+      if (lc && lc.repeat < 4) lc.repeat += 1;
+      else if (br && br.repeat < 2) br.repeat += 1;
+      else if (!blocks.some((b) => b.name === 'inter') && firstC >= 0 && firstC < blocks.length - 1) blocks.splice(firstC + 1, 0, { name: 'inter', repeat: 1, note: '' });
+      else break;
+      candidates.push(clone(blocks));
+    }
+  }
+  const best = candidates.reduce((a, b) => (Math.abs(secs(b) - target) < Math.abs(secs(a) - target) ? b : a));
+  return serializeForm(best);
+}
+
+// ────────────────────────────── 저장소 (IndexedDB) ──────────────────────────────
+// 저장 버튼은 없다. 바뀔 때마다 조용히 저장된다.
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('konti', 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore('songs', { keyPath: 'id' });
+      d.createObjectStore('weeks', { keyPath: 'id' });
+      d.createObjectStore('meta', { keyPath: 'key' });
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function tx(store, mode, fn) {
+  return new Promise((res, rej) => {
+    const t = db.transaction(store, mode);
+    const req = fn(t.objectStore(store));
+    t.oncomplete = () => res(req && req.result);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error);
+  });
+}
+const idbAll = (s) => tx(s, 'readonly', (o) => o.getAll());
+const idbPut = (s, v) => tx(s, 'readwrite', (o) => o.put(v));
+const idbDel = (s, k) => tx(s, 'readwrite', (o) => o.delete(k));
+const idbClear = (s) => tx(s, 'readwrite', (o) => o.clear());
+
+// 메모리에만 두는 값(_로 시작, url)은 저장에서 뺀다
+function toRecord(obj) {
+  return JSON.parse(JSON.stringify(obj, (k, v) => (k.startsWith('_') || k === 'url' ? undefined : v)), (k, v) => v);
+}
+function songRecord(song) {
+  const rec = toRecord({ ...song, sheets: [] });
+  rec.sheets = song.sheets.map((s) => ({ blob: s.blob, w: s.w, h: s.h }));
+  return rec;
+}
+const saveSong = (song) => { song.updatedAt = Date.now(); return idbPut('songs', songRecord(song)); };
+const saveWeek = (week) => { week.updatedAt = Date.now(); return idbPut('weeks', toRecord(week)); };
+
+// ────────────────────────────── 상태 ──────────────────────────────
+const state = {
+  songs: {},            // id → song {id,title,key,tempo,lastForm,placement,labels,sheets:[{blob,w,h,url}]}
+  weeks: [],            // {id,date,target,songs:[{id,songId,form}]}
+  month: monthOf(toISO(new Date())),
+  view: { name: 'home' },
+  edit: null,           // 곡 편집 화면의 임시 상태
+  sheet: null,          // 열려 있는 시트(모달)
+};
+const songOf = (id) => state.songs[id];
+const weekOf = (id) => state.weeks.find((w) => w.id === id);
+function sheetUrl(sheet) {
+  if (!sheet.url) sheet.url = URL.createObjectURL(sheet.blob);
+  return sheet.url;
+}
+function weekSecs(week) {
+  let total = 0, known = 0;
+  for (const e of week.songs) {
+    const s = songOf(e.songId);
+    if (!s) continue;
+    const secs = estimateSecs(e.form || s.lastForm, s.tempo);
+    if (secs) { total += secs; known++; }
+  }
+  // 곡 사이 전환 약 20초
+  return { total: total + Math.max(0, week.songs.length - 1) * 20, known };
+}
+
+// ────────────────────────────── 이미지 처리 ──────────────────────────────
+function loadImage(blob) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('이미지를 읽을 수 없습니다'));
+    img.src = URL.createObjectURL(blob);
+  });
+}
+function canvasToBlob(c, type = 'image/jpeg', q = 0.92) {
+  return new Promise((res) => c.toBlob((b) => res(b), type, q));
+}
+
+// 행마다 어두운 픽셀 비율. 폭 200으로 줄여서 빠르게 훑는다.
+function rowDarkness(img) {
+  const W = 200, H = Math.max(1, Math.round((img.height / img.width) * W));
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, W, H);
+  const d = ctx.getImageData(0, 0, W, H).data;
+  const rows = [];
+  for (let y = 0; y < H; y++) {
+    let dark = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 200) dark++;
+    }
+    rows.push(dark / W);
+  }
+  return rows;
+}
+function whiteRuns(rows, th = 0.006) {
+  const runs = []; let start = null;
+  rows.forEach((r, i) => {
+    if (r < th) { if (start === null) start = i; }
+    else if (start !== null) { runs.push([start, i]); start = null; }
+  });
+  if (start !== null) runs.push([start, rows.length]);
+  return runs;
+}
+
+// 사진을 정리해서 저장용 시트로 만든다: 크기 줄이기 → 위쪽 여백 확보 → JPEG
+async function prepareSheet(file) {
+  const img = await loadImage(file);
+  const maxW = 1800;
+  const scale = img.width > maxW ? maxW / img.width : 1;
+  let W = Math.round(img.width * scale), H = Math.round(img.height * scale);
+
+  const rows = rowDarkness(img);
+  let topWhite = 0;
+  for (const r of rows) { if (r < 0.006) topWhite++; else break; }
+  const topRatio = topWhite / rows.length;
+  // 송폼 적을 자리가 없으면 위에 흰 띠를 붙인다. 악보를 가리지 않기 위해서.
+  const pad = topRatio < 0.055 ? Math.round(H * (0.085 - topRatio)) : 0;
+
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H + pad;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, pad, W, H);
+  URL.revokeObjectURL(img.src);
+  const blob = await canvasToBlob(c);
+  return { blob, w: c.width, h: c.height, padded: pad > 0 };
+}
+
+// 송폼을 놓을 자리: 제목 바로 아래 여백 → 없으면 제목 위 여백 → 없으면 가장 넓은 여백
+function detectSlot(img) {
+  const rows = rowDarkness(img);
+  const H = rows.length;
+  const limit = Math.floor(H * 0.45);
+  const runs = whiteRuns(rows).map(([s, e]) => [s, Math.min(e, limit)]).filter(([s, e]) => s < limit && e > s);
+  if (!runs.length) return { x: 0.5, y: 0.04, size: 0.026 };
+  const minBand = H * 0.022;
+  const tStart = rows.findIndex((r) => r >= 0.006);
+  let slot = null;
+  if (tStart >= 0) {
+    let tEnd = tStart; while (tEnd < H && rows[tEnd] >= 0.006) tEnd++;
+    const gap = runs.find(([s]) => s >= tEnd);
+    if (gap && gap[1] - gap[0] >= minBand) slot = gap;
+    else {
+      const above = runs.filter(([s, e]) => e <= tStart && e - s >= minBand);
+      if (above.length) slot = above.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+    }
+  }
+  if (!slot) slot = runs.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+  const band = (slot[1] - slot[0]) / H;             // 세로 비율
+  const aspect = img.height / img.width;
+  const size = clamp((band * aspect) * 0.6, 0.012, 0.026); // 글자 크기는 가로 대비 비율
+  return { x: 0.5, y: (slot[0] + slot[1]) / 2 / H, size: +size.toFixed(4) };
+}
+
+// ────────────────────────────── 캔버스 렌더링 ──────────────────────────────
+const FONT = '"Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR", "Nanum Gothic", sans-serif';
+const bitmapCache = new WeakMap();
+async function bitmapOf(sheet) {
+  if (bitmapCache.has(sheet)) return bitmapCache.get(sheet);
+  const img = await loadImage(sheet.blob);
+  bitmapCache.set(sheet, img);
+  return img;
+}
+
+// 한 장을 그린다. 반환값은 드래그 판정용 상자들(정규화 좌표).
+function drawPage(canvas, img, { form, placement, labels, page, selected }) {
+  const W = img.width, H = img.height;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(img, 0, 0);
+  const boxes = { form: null, labels: [] };
+
+  if (form && placement && (placement.page || 0) === page) {
+    const blocks = parseForm(form);
+    if (blocks.length) {
+      let px = Math.round(W * (placement.size || 0.026));
+      const pieces = [];
+      blocks.forEach((b, i) => { if (i) pieces.push({ t: '-', r: false }); pieces.push({ t: blockText(b), r: isInst(b.name) }); });
+      const measure = () => { ctx.font = `700 ${px}px ${FONT}`; return pieces.reduce((s, p) => s + ctx.measureText(p.t).width, 0); };
+      let total = measure();
+      while (total > W * 0.94 && px > 10) { px = Math.floor(px * 0.94); total = measure(); }
+      const cx = placement.x * W, cy = placement.y * H;
+      let x = cx - total / 2;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      for (const p of pieces) {
+        ctx.fillStyle = p.r ? '#e00000' : '#000';
+        ctx.fillText(p.t, x, cy);
+        x += ctx.measureText(p.t).width;
+      }
+      boxes.form = { x0: (cx - total / 2 - px * 0.4) / W, x1: (cx + total / 2 + px * 0.4) / W, y0: (cy - px * 0.8) / H, y1: (cy + px * 0.8) / H };
+      if (selected === 'form') { ctx.strokeStyle = 'rgba(47,109,246,.8)'; ctx.lineWidth = Math.max(2, W / 500); ctx.setLineDash([8, 6]); ctx.strokeRect(boxes.form.x0 * W, boxes.form.y0 * H, (boxes.form.x1 - boxes.form.x0) * W, (boxes.form.y1 - boxes.form.y0) * H); ctx.setLineDash([]); }
+    }
+  }
+
+  (labels || []).forEach((lb, i) => {
+    if ((lb.page || 0) !== page) return;
+    const px = Math.round(W * (lb.size || 0.03));
+    ctx.font = `700 ${px}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e00000';
+    ctx.fillText(lb.text, lb.x * W, lb.y * H);
+    const w = ctx.measureText(lb.text).width;
+    boxes.labels.push({ i, x0: (lb.x * W - w / 2 - px * 0.3) / W, x1: (lb.x * W + w / 2 + px * 0.3) / W, y0: (lb.y * H - px * 0.7) / H, y1: (lb.y * H + px * 0.7) / H });
+  });
+  return boxes;
+}
+
+async function renderSongPage(song, page, form) {
+  const sheet = song.sheets[page];
+  const img = await bitmapOf(sheet);
+  const c = document.createElement('canvas');
+  drawPage(c, img, { form, placement: song.placement, labels: song.labels, page });
+  return c;
+}
+async function renderSongBlobs(song, form) {
+  const out = [];
+  for (let p = 0; p < song.sheets.length; p++) {
+    const c = await renderSongPage(song, p, form);
+    out.push(await canvasToBlob(c, 'image/jpeg', 0.92));
+  }
+  return out;
+}
+
+// ────────────────────────────── 제목 읽기 (OCR) ──────────────────────────────
+// 악보 맨 위 제목 띠만 잘라 문자 인식한다. 인식 엔진은 처음 쓸 때 한 번 내려받고 브라우저가 기억한다.
+// 아직 진짜 제목이 아닌 것: "곡 3", "곡 2-1", 사진 앱 이름. (영어 제목 "Wake"는 진짜 제목)
+const isPlaceholderTitle = (t) => /^곡 \d+(-\d+)?$/.test(t || '') || /kakaotalk|^img|^dsc|screenshot|^photo|^[\d\s]+$/i.test(t || '');
+let ocrWorkerP = null;
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const el = document.createElement('script');
+    el.src = src; el.onload = res; el.onerror = () => rej(new Error('script load failed'));
+    document.head.appendChild(el);
+  });
+}
+async function ocrWorker() {
+  if (!ocrWorkerP) {
+    ocrWorkerP = (async () => {
+      if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+      const w = await Tesseract.createWorker('kor+eng', 1, { logger: () => {} });
+      await w.setParameters({ tessedit_pageseg_mode: '6' }); // 한 덩어리 텍스트
+      return w;
+    })().catch((e) => { ocrWorkerP = null; throw e; });
+  }
+  return ocrWorkerP;
+}
+// 제목 띠: 맨 위 여백 다음에 나오는 첫 글자 덩어리
+function titleBandCanvas(img) {
+  const rows = rowDarkness(img);
+  const H = rows.length, scale = img.height / H;
+  const tStart = rows.findIndex((r) => r >= 0.006);
+  if (tStart < 0) return null;
+  let tEnd = tStart;
+  while (tEnd < H && rows[tEnd] >= 0.006) tEnd++;
+  const y0 = Math.max(0, Math.round((tStart - 2) * scale));
+  const y1 = Math.min(img.height, Math.round((tEnd + 2) * scale));
+  const bandH = y1 - y0;
+  if (bandH < 8) return null;
+  const up = Math.min(3, Math.max(1, 1600 / img.width)); // 작은 사진은 키워서 읽는다
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * up); c.height = Math.round(bandH * up);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(img, 0, y0, img.width, bandH, 0, 0, c.width, c.height);
+  return c;
+}
+// 큰 글자만 남긴다 (같은 줄의 작사·작곡자, 출판사 표기는 작아서 걸러진다)
+function cleanTitle(words) {
+  if (!words.length) return '';
+  const hgt = (w) => w.bbox.y1 - w.bbox.y0;
+  const maxH = Math.max(...words.map(hgt));
+  let t = words.filter((w) => hgt(w) >= maxH * 0.6)
+    .map((w) => w.text.replace(/[^가-힣A-Za-z0-9'!?,.()\-]/g, '')).filter(Boolean).join(' ').trim();
+  // 한글 인식기는 "말씀"을 "말 씀"으로 쪼개곤 하고, 글자 간격으로는 진짜 띄어쓰기와 구분이 안 된다.
+  // 한글 사이 공백은 모두 붙여 "주님말씀하시면"처럼 일관되게 낸다. 영어 단어 사이 공백은 남긴다.
+  t = t.replace(/([가-힣])\s+(?=[가-힣])/g, '$1');
+  return t.length >= 2 && /[가-힣A-Za-z]/.test(t) ? t.slice(0, 40) : '';
+}
+async function readTitle(song) {
+  const img = await bitmapOf(song.sheets[0]);
+  const band = titleBandCanvas(img);
+  if (!band) return '';
+  const w = await ocrWorker();
+  const { data } = await w.recognize(band);
+  return cleanTitle(data.words || []);
+}
+// 여러 곡의 제목을 차례로 읽어 넣는다. 읽히는 대로 화면을 갱신한다.
+async function autoTitles(songs, { quiet = false } = {}) {
+  const targets = songs.filter((s) => s && s.sheets.length);
+  if (!targets.length) return 0;
+  let done = 0;
+  try {
+    if (!quiet) toast('악보에서 제목을 읽고 있어요…');
+    for (const s of targets) {
+      const t = await readTitle(s);
+      if (t) { s.title = t; await saveSong(s); done++; render(); }
+    }
+    if (!quiet) toast(done ? `제목 ${done}개를 읽었어요. 틀리면 제목을 눌러 고치세요` : '제목을 읽지 못했어요. 제목을 눌러 직접 입력하세요', !done);
+  } catch (e) {
+    console.error(e);
+    if (!quiet) toast('인터넷이 안 돼 제목을 읽지 못했어요. 제목을 눌러 직접 입력하세요', true);
+  }
+  return done;
+}
+
+// ────────────────────────────── 공유 · 인쇄 ──────────────────────────────
+const safeName = (s) => (s || '곡').replace(/[\\/:*?"<>|]+/g, '_').trim();
+const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// JPEG 이미지들을 A4 한 쪽씩 담은 PDF. 라이브러리 없이 직접 쓴다 — 인터넷 없어도 되고, 늘 같은 결과.
+function buildPdf(images) {
+  const enc = new TextEncoder();
+  const parts = [], offsets = [];
+  let len = 0;
+  const push = (chunk) => { const b = typeof chunk === 'string' ? enc.encode(chunk) : chunk; parts.push(b); len += b.length; };
+  const obj = (num, body) => { offsets[num] = len; push(`${num} 0 obj\n`); (Array.isArray(body) ? body : [body]).forEach(push); push('\nendobj\n'); };
+  const n = images.length;
+  push('%PDF-1.4\n');
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, `<< /Type /Pages /Kids [${images.map((_, i) => `${3 + i * 3} 0 R`).join(' ')}] /Count ${n} >>`);
+  const PW = 595.28, PH = 841.89, M = 18; // A4 (pt), 여백
+  images.forEach((im, i) => {
+    const pg = 3 + i * 3, xo = pg + 1, ct = pg + 2;
+    const k = Math.min((PW - 2 * M) / im.w, (PH - 2 * M) / im.h);
+    const dw = im.w * k, dh = im.h * k, dx = (PW - dw) / 2, dy = (PH - dh) / 2;
+    const content = `q ${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${dx.toFixed(2)} ${dy.toFixed(2)} cm /Im0 Do Q`;
+    obj(pg, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${xo} 0 R >> >> /Contents ${ct} 0 R >>`);
+    obj(xo, [`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`, im.bytes, '\nendstream']);
+    obj(ct, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+  });
+  const xref = len, total = 3 + 3 * n;
+  let x = `xref\n0 ${total}\n0000000000 65535 f \n`;
+  for (let i = 1; i < total; i++) x += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+  push(x);
+  push(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+
+// 곡들을 합성해 PDF 하나로. 휴대폰이면 공유창(카톡), 컴퓨터면 다운로드 폴더.
+async function exportPdf(entries, name) {
+  const images = [];
+  for (const { song, form } of entries) {
+    for (let p = 0; p < song.sheets.length; p++) {
+      const c = await renderSongPage(song, p, form);
+      const blob = await canvasToBlob(c, 'image/jpeg', 0.9);
+      images.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height });
+    }
+  }
+  if (!images.length) return toast('악보가 있는 곡이 없습니다', true);
+  const pdf = buildPdf(images);
+  const file = new File([pdf], `${safeName(name)}.pdf`, { type: 'application/pdf' });
+  if (isMobile() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  download(pdf, file.name);
+  toast(`'${file.name}' 을 다운로드 폴더에 저장했어요. 카톡에 파일로 올리면 됩니다`);
+}
+const pdfSong = (song, form) => exportPdf([{ song, form }], song.title);
+function pdfWeek(week) {
+  const entries = week.songs.map((e) => { const s = songOf(e.songId); return s && s.sheets.length ? { song: s, form: e.form || s.lastForm } : null; }).filter(Boolean);
+  return exportPdf(entries, `${weekTitle(week)} 콘티`);
+}
+
+async function printWeek(week) {
+  const box = $('#print');
+  box.innerHTML = '';
+  for (const e of week.songs) {
+    const s = songOf(e.songId);
+    if (!s) continue;
+    for (let p = 0; p < s.sheets.length; p++) {
+      const c = await renderSongPage(s, p, e.form || s.lastForm);
+      const img = document.createElement('img');
+      img.src = c.toDataURL('image/jpeg', 0.92);
+      box.appendChild(img);
+    }
+  }
+  if (!box.children.length) return toast('인쇄할 악보가 없습니다', true);
+  await sleep(150);
+  window.print();
+}
+
+// ────────────────────────────── 화면 ──────────────────────────────
+function go(view) { state.view = view; state.edit = null; render(); window.scrollTo(0, 0); }
+function render() {
+  const app = $('#app');
+  const v = state.view;
+  if (v.name === 'home') app.innerHTML = viewHome();
+  else if (v.name === 'week') app.innerHTML = viewWeek(v.id);
+  else if (v.name === 'song') app.innerHTML = viewSong(v);
+  else if (v.name === 'library') app.innerHTML = viewLibrary();
+  if (v.name === 'song') afterSongRender();
+  renderSheet();
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act;
+  if (ACTIONS[act]) ACTIONS[act](el, e);
+});
+
+// ── 홈: 이번 달 주차들 ──
+function viewHome() {
+  const [y, m] = state.month.split('-').map(Number);
+  const weeks = state.weeks.filter((w) => monthOf(w.date) === state.month).sort((a, b) => a.date.localeCompare(b.date));
+  const cards = weeks.map((w) => {
+    const { total } = weekSecs(w);
+    const over = total > (w.target || 20) * 60 * 1.05;
+    const thumbs = w.songs.map((e) => {
+      const s = songOf(e.songId);
+      return `<div class="th" ${s && s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>`;
+    }).join('');
+    return `<div class="card tap week-card" data-act="openWeek" data-id="${w.id}">
+      <div class="row"><div class="date grow">${weekTitle(w)} 콘티</div><div class="muted small">${fmtDate(w.date)}</div></div>
+      ${w.songs.length
+        ? `<div class="thumbs">${thumbs}</div><div class="time ${over ? 'over' : ''}">${w.songs.length}곡 · ${fmtDur(total)} · 목표 ${w.target || 20}분</div>`
+        : '<div class="muted small" style="margin-top:6px">아직 악보가 없습니다</div>'}
+    </div>`;
+  }).join('');
+  return `
+    <div class="top">
+      <button class="icon" data-act="openLibrary" title="곡 보관함">♪</button>
+      <h1>콘티</h1>
+      <button class="icon" data-act="openSettings" title="설정">⋯</button>
+    </div>
+    <div class="wrap">
+      <div class="month-nav">
+        <button class="icon" data-act="prevMonth">‹</button>
+        <div class="label">${y}년 ${m}월</div>
+        <button class="icon" data-act="nextMonth">›</button>
+      </div>
+      ${cards || `<div class="empty">이 달의 콘티가 아직 없습니다.<br>아래 <b>주차 추가</b>를 눌러 시작하세요.</div>`}
+    </div>
+    <div class="bottom"><div class="inner"><button class="btn primary" data-act="addWeek">＋ 주차 추가</button></div></div>`;
+}
+
+// ── 주차: 곡 목록 ──
+function viewWeek(id) {
+  const w = weekOf(id);
+  if (!w) return viewHome();
+  const { total } = weekSecs(w);
+  const target = (w.target || 20) * 60;
+  const rows = w.songs.map((e, i) => {
+    const s = songOf(e.songId);
+    const thumb = s && s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : '';
+    const form = e.form || (s && s.lastForm) || '';
+    const secs = s ? estimateSecs(form, s.tempo) : 0;
+    return `<div class="card entry" data-id="${e.id}">
+      <div class="thumb" ${thumb} data-act="openEntry" data-week="${w.id}" data-entry="${e.id}"></div>
+      <div class="grow" data-act="openEntry" data-week="${w.id}" data-entry="${e.id}">
+        <div class="title ellip" ${s ? `data-act="renameSong" data-id="${s.id}" title="눌러서 제목 고치기"` : ''}>${i + 1}. ${h(s ? s.title : '(삭제된 곡)')}${s && s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}${s && isPlaceholderTitle(s.title) ? ' <span class="muted small">✎</span>' : ''}</div>
+        <div class="form">${form ? formHtml(form) : '<span class="muted">송폼 없음 — 눌러서 정하기</span>'}</div>
+        <div class="meta">${fmtDur(secs)}${s && !s.sheets.length ? ' · <span style="color:var(--warn)">악보 없음</span>' : ''}</div>
+      </div>
+      <div class="ctl">
+        <button data-act="moveEntry" data-week="${w.id}" data-entry="${e.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button data-act="moveEntry" data-week="${w.id}" data-entry="${e.id}" data-dir="1" ${i === w.songs.length - 1 ? 'disabled' : ''}>▼</button>
+        <button data-act="removeEntry" data-week="${w.id}" data-entry="${e.id}">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="top">
+      <button class="icon" data-act="home">‹</button>
+      <h1>${weekTitle(w)} <span class="muted" style="font-size:14px;font-weight:400">${fmtDate(w.date)}</span></h1>
+      <button class="icon" data-act="weekMenu" data-id="${w.id}">⋯</button>
+    </div>
+    <div class="wrap">
+      <div class="target-row">
+        <span>${w.songs.length ? `<b class="${total > target * 1.05 ? 'over' : ''}">${fmtDur(total)}</b> 예상` : '악보를 추가하세요'}</span>
+        <button data-act="setTarget" data-id="${w.id}">목표 ${w.target || 20}분 ›</button>
+      </div>
+      ${rows || `<div class="empty">아직 악보가 없습니다.<br><b>악보 추가</b>에서 사진을 여러 장 고르면<br>한 장이 한 곡으로 들어옵니다.</div>`}
+      <div class="two" style="margin-top:4px">
+        <button class="btn" data-act="addSong" data-id="${w.id}">＋ 악보 추가</button>
+        <button class="btn soft" data-act="suggestWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>✨ 전체 추천</button>
+      </div>
+    </div>
+    <div class="bottom"><div class="inner">
+      <button class="btn primary" data-act="pdfWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>PDF로 내보내기 (카톡 공유)</button>
+    </div></div>`;
+}
+
+// ── 곡 편집 (핵심 화면) ──
+const MAIN_BLOCKS = [['Intro', '전주'], ['V1', '1절'], ['V2', '2절'], ['P.C', '프리코러스'], ['C', '후렴'], ['B', '브리지'], ['inter', '간주'], ['outro', '후주']];
+const MORE_BLOCKS = [['V', '절'], ['V3', '3절'], ['C1', '후렴1'], ['C2', '후렴2'], ['A', 'A'], ['D', 'D'], ['E', 'E'], ['inter1', '간주1'], ['inter2', '간주2'], ['inter3', '간주3'], ['Ending', '엔딩']];
+const LABEL_TEXTS = ['V', 'V1', 'V2', 'P.C', 'C', 'C1', 'C2', 'B', 'A', 'D', 'E', 'Intro', 'inter', 'outro'];
+
+function currentForm() {
+  const e = state.edit;
+  return e.entry ? e.entry.form : e.song.lastForm;
+}
+function setForm(text) {
+  const e = state.edit;
+  const song = e.song;
+  if (e.entry) { e.entry.form = text; saveWeek(e.week); }
+  song.lastForm = text;
+  saveSong(song);
+}
+
+function viewSong(v) {
+  const song = songOf(v.songId);
+  if (!song) return viewHome();
+  const week = v.weekId ? weekOf(v.weekId) : null;
+  const entry = week ? week.songs.find((e) => e.id === v.entryId) : null;
+  const idx = week ? week.songs.findIndex((e) => e.id === v.entryId) : -1;
+  const nav = week
+    ? `<button class="btn" data-act="navSong" data-dir="-1" ${idx <= 0 ? 'disabled' : ''}>‹ 이전</button>
+       <button class="btn" data-act="navSong" data-dir="1" ${idx >= week.songs.length - 1 ? 'disabled' : ''}>다음 ›</button>`
+    : `<button class="btn" data-act="back">보관함으로</button>`;
+  if (!state.edit || state.edit.song !== song) {
+    state.edit = { song, week, entry, page: 0, mode: 'move', labelText: 'V', selected: null, more: false, selChip: null, boxes: null };
+  }
+  const ed = state.edit;
+  const form = currentForm();
+  const blocks = parseForm(form);
+  const pages = song.sheets.map((_, i) => `<button class="${i === ed.page ? 'on' : ''}" data-act="page" data-i="${i}">${i + 1}장</button>`).join('');
+  const chips = blocks.map((b, i) => `<button class="chip ${isInst(b.name) ? 'r' : ''} ${ed.selChip === i ? 'on' : ''}" data-act="selChip" data-i="${i}">${h(b.name)}${b.repeat > 1 ? `<span class="rep">×${b.repeat}</span>` : ''}${b.note ? `<span class="rep">(${h(b.note)})</span>` : ''}</button>`).join('');
+  const sel = ed.selChip !== null && blocks[ed.selChip] ? blocks[ed.selChip] : null;
+  const blockBtn = ([name, ko]) => `<button class="${isInst(name) ? 'r' : ''}" data-act="addBlock" data-name="${h(name)}"><b>${h(name)}</b><span>${ko}</span></button>`;
+
+  return `
+    <div class="top">
+      <button class="icon" data-act="back">‹</button>
+      <h1>${h(song.title)}${week ? ` <span class="muted" style="font-size:14px;font-weight:400">${idx + 1}/${week.songs.length}</span>` : ''}</h1>
+      <button class="icon" data-act="songMenu">⋯</button>
+    </div>
+    <div class="wrap">
+      ${song.sheets.length ? `
+        <div class="stage ${ed.mode === 'label' ? 'label-mode' : ''}" id="stage">
+          <canvas id="cv"></canvas>
+          <div class="hint">${ed.mode === 'label' ? '악보를 눌러 라벨을 찍고, 라벨을 다시 누르면 지워집니다' : '글자를 손가락으로 끌어 옮기세요'}</div>
+        </div>
+        <div class="pages">${pages}<button class="add" data-act="addPage">＋ 장 추가</button></div>
+        <div class="tools">
+          <button class="btn sm ${ed.mode === 'label' ? 'on' : ''}" data-act="toggleLabel">${ed.mode === 'label' ? '라벨 끝' : '라벨 찍기'}</button>
+          <button class="btn sm" data-act="autoSlot">위치 자동</button>
+          <button class="btn sm" data-act="removePage">이 장 삭제</button>
+        </div>
+        ${ed.mode === 'label' ? `
+          <div class="label-picker">${LABEL_TEXTS.map((t) => `<button class="${ed.labelText === t ? 'on' : ''}" data-act="labelText" data-t="${t}">${t}</button>`).join('')}</div>
+          <div class="slider">라벨 크기 <input type="range" id="labelSize" min="15" max="60" value="${Math.round((song.labelSize || 0.03) * 1000)}"></div>
+        ` : `
+          <div class="slider">글자 크기 <input type="range" id="formSize" min="12" max="45" value="${Math.round((song.placement?.size || 0.026) * 1000)}"></div>
+        `}
+      ` : `
+        <div class="empty" style="padding:40px 10px">악보 사진이 없습니다.<br><button class="btn primary" data-act="addPage" style="margin-top:14px">악보 사진 넣기</button></div>
+      `}
+
+      <div class="section">
+        <h3>송폼 <span class="right">${fmtDur(estimateSecs(form, song.tempo))}</span></h3>
+        <div class="chips">${chips || '<div class="chip-empty">아래 버튼을 눌러 순서대로 넣으세요. 예) Intro → V1 → C → V2 → C → outro</div>'}</div>
+        ${sel ? `<div class="chip-tools">
+          <button class="btn sm" data-act="chipMove" data-dir="-1" ${ed.selChip === 0 ? 'disabled' : ''}>◀</button>
+          <button class="btn sm" data-act="chipMove" data-dir="1" ${ed.selChip === blocks.length - 1 ? 'disabled' : ''}>▶</button>
+          <button class="btn sm ${sel.repeat === 2 ? 'soft' : ''}" data-act="chipRep" data-n="2">×2</button>
+          <button class="btn sm ${sel.repeat === 3 ? 'soft' : ''}" data-act="chipRep" data-n="3">×3</button>
+          <button class="btn sm ${sel.repeat === 4 ? 'soft' : ''}" data-act="chipRep" data-n="4">×4</button>
+          <button class="btn sm" data-act="chipNote">메모</button>
+          <button class="btn sm danger" data-act="chipDel">삭제</button>
+        </div>` : ''}
+      </div>
+
+      <div class="section">
+        <div class="blocks">
+          ${MAIN_BLOCKS.map(blockBtn).join('')}
+          ${ed.more ? MORE_BLOCKS.map(blockBtn).join('') + `<button class="more" data-act="typeForm">직접<br>입력</button>` : `<button class="more" data-act="moreBlocks">더보기 ▾</button>`}
+        </div>
+        <div class="two" style="margin-top:10px">
+          <button class="btn soft" data-act="suggest">✨ 추천 받기</button>
+          <button class="btn" data-act="clearForm" ${blocks.length ? '' : 'disabled'}>모두 지우기</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>곡 정보</h3>
+        <div class="two">
+          <div class="field"><label>제목</label><input type="text" id="fTitle" value="${h(song.title)}" placeholder="곡 제목"></div>
+          <div class="field"><label>키</label><input type="text" id="fKey" value="${h(song.key || '')}" placeholder="예: G, Bb"></div>
+        </div>
+        <div class="field"><label>속도 <span class="muted">(예상 시간 계산에 쓰입니다)</span></label>
+          <div class="seg">${[['fast', '빠른 곡'], ['mid', '보통'], ['slow', '느린 곡']].map(([k, ko]) => `<button class="${(song.tempo || 'mid') === k ? 'on' : ''}" data-act="tempo" data-k="${k}">${ko}</button>`).join('')}</div>
+        </div>
+      </div>
+    </div>
+    <div class="bottom"><div class="inner">
+      ${nav}
+      <button class="btn primary" data-act="pdfSong" ${song.sheets.length ? '' : 'disabled'}>PDF</button>
+    </div></div>`;
+}
+
+// 캔버스 그리기와 드래그는 렌더 후에 붙인다
+async function afterSongRender() {
+  const ed = state.edit;
+  const song = ed.song;
+  const cv = $('#cv');
+  $('#fTitle')?.addEventListener('change', (e) => { song.title = e.target.value.trim() || '제목 없음'; saveSong(song); $('.top h1').textContent = song.title; });
+  $('#fKey')?.addEventListener('change', (e) => { song.key = e.target.value.trim(); saveSong(song); });
+  $('#formSize')?.addEventListener('input', (e) => { song.placement = { ...(song.placement || { x: .5, y: .05, page: 0 }), size: +e.target.value / 1000 }; redraw(); });
+  $('#formSize')?.addEventListener('change', () => saveSong(song));
+  $('#labelSize')?.addEventListener('input', (e) => { const s = +e.target.value / 1000; song.labelSize = s; (song.labels || []).forEach((l) => { if ((l.page || 0) === ed.page) l.size = s; }); redraw(); });
+  $('#labelSize')?.addEventListener('change', () => saveSong(song));
+  if (!cv || !song.sheets[ed.page]) return;
+
+  if (!song.placement) { song.placement = { ...detectSlot(await bitmapOf(song.sheets[0])), page: 0 }; saveSong(song); }
+  await redraw();
+
+  // 드래그: 송폼 글자 또는 라벨을 잡아 옮긴다. 라벨 모드에서 빈 곳을 누르면 라벨 추가.
+  let drag = null;
+  const norm = (e) => { const r = cv.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) }; };
+  const hit = (p, b) => b && p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
+  cv.addEventListener('pointerdown', (e) => {
+    const p = norm(e);
+    const boxes = ed.boxes || {};
+    const lb = (boxes.labels || []).find((b) => hit(p, b));
+    if (lb) drag = { type: 'label', i: lb.i, start: p, orig: { x: song.labels[lb.i].x, y: song.labels[lb.i].y }, moved: false };
+    else if (hit(p, boxes.form) && ed.mode !== 'label') drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false };
+    else if (ed.mode === 'label') drag = { type: 'new', start: p, moved: false };
+    else if (boxes.form) drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false, loose: true };
+    if (drag) { try { cv.setPointerCapture(e.pointerId); } catch (_) { /* 합성 이벤트 등 포인터가 없을 때 */ } ed.selected = drag.type === 'form' ? 'form' : null; }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const p = norm(e);
+    const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    if (Math.abs(dx) + Math.abs(dy) > 0.004) drag.moved = true;
+    if (!drag.moved) return;
+    if (drag.type === 'form') { song.placement.x = clamp(drag.orig.x + dx, 0.05, 0.95); song.placement.y = clamp(drag.orig.y + dy, 0.01, 0.99); }
+    else if (drag.type === 'label') { song.labels[drag.i].x = clamp(drag.orig.x + dx, 0.01, 0.99); song.labels[drag.i].y = clamp(drag.orig.y + dy, 0.01, 0.99); }
+    redraw();
+  });
+  const end = (e) => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (d.type === 'new' && !d.moved) {
+      song.labels = song.labels || [];
+      song.labels.push({ page: ed.page, x: d.start.x, y: d.start.y, text: ed.labelText, size: song.labelSize || 0.03 });
+    } else if (d.type === 'label' && !d.moved && ed.mode === 'label') {
+      song.labels.splice(d.i, 1);
+    } else if (d.type === 'form' && d.loose && !d.moved) {
+      return; // 빈 곳을 그냥 탭한 것
+    }
+    ed.selected = null;
+    saveSong(song);
+    redraw();
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+}
+async function redraw() {
+  const ed = state.edit; if (!ed) return;
+  const cv = $('#cv'); if (!cv) return;
+  const sheet = ed.song.sheets[ed.page]; if (!sheet) return;
+  const img = await bitmapOf(sheet);
+  ed.boxes = drawPage(cv, img, { form: currentForm(), placement: ed.song.placement, labels: ed.song.labels, page: ed.page, selected: ed.selected });
+}
+
+// ── 보관함 ──
+function viewLibrary() {
+  const songs = Object.values(state.songs).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const items = songs.map((s) => `<button class="lib-item" data-act="openSong" data-id="${s.id}">
+      <div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>
+      <div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div>
+      <span class="muted">›</span></button>`).join('');
+  return `
+    <div class="top">
+      <button class="icon" data-act="home">‹</button>
+      <h1>곡 보관함</h1>
+      <button class="icon ghost">·</button>
+    </div>
+    <div class="wrap">
+      <div class="card" style="padding:4px 10px">${items || '<div class="empty">아직 곡이 없습니다.<br>주차에서 곡을 추가하면 여기에 쌓입니다.</div>'}</div>
+    </div>
+    <div class="bottom"><div class="inner"><button class="btn primary" data-act="newSongInLibrary">＋ 새 곡 (악보 사진)</button></div></div>`;
+}
+
+// ── 시트(모달) ──
+function openSheet(html, onMount) { state.sheet = { html, onMount }; renderSheet(); }
+function closeSheet() { state.sheet = null; renderSheet(); }
+function renderSheet() {
+  let bg = $('#sheetBg');
+  if (!state.sheet) { bg?.remove(); return; }
+  if (!bg) { bg = document.createElement('div'); bg.id = 'sheetBg'; bg.className = 'sheet-bg'; bg.addEventListener('click', (e) => { if (e.target === bg) closeSheet(); }); document.body.appendChild(bg); }
+  bg.innerHTML = `<div class="sheet">${state.sheet.html}</div>`;
+  state.sheet.onMount?.(bg);
+}
+function askText(title, value = '', placeholder = '') {
+  return new Promise((res) => {
+    openSheet(`<h2>${h(title)}</h2><input type="text" id="askIn" value="${h(value)}" placeholder="${h(placeholder)}">
+      <div class="actions"><button class="btn" id="askNo">취소</button><button class="btn primary" id="askOk">확인</button></div>`, (bg) => {
+      const inp = $('#askIn', bg); inp.focus(); inp.select();
+      const ok = () => { const v = inp.value; closeSheet(); res(v); };
+      $('#askOk', bg).onclick = ok;
+      inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+      $('#askNo', bg).onclick = () => { closeSheet(); res(null); };
+    });
+  });
+}
+function confirmSheet(title, okLabel = '삭제') {
+  return new Promise((res) => {
+    openSheet(`<h2>${h(title)}</h2><div class="actions"><button class="btn" id="cNo">취소</button><button class="btn primary" id="cOk" style="background:var(--danger);border-color:var(--danger)">${h(okLabel)}</button></div>`, (bg) => {
+      $('#cOk', bg).onclick = () => { closeSheet(); res(true); };
+      $('#cNo', bg).onclick = () => { closeSheet(); res(false); };
+    });
+  });
+}
+function menuSheet(title, items) {
+  openSheet(`<h2>${h(title)}</h2><div class="list">${items.map((it, i) => `<button class="${it.danger ? 'danger' : ''}" data-i="${i}"><span class="ic">${it.icon || '•'}</span>${h(it.label)}</button>`).join('')}</div>`, (bg) => {
+    $$('.list button', bg).forEach((b) => b.onclick = () => { closeSheet(); items[+b.dataset.i].run(); });
+  });
+}
+function pickFiles() {
+  return new Promise((res) => {
+    const inp = $('#filePick');
+    inp.value = '';
+    inp.onchange = () => res(Array.from(inp.files || []));
+    inp.click();
+  });
+}
+
+// 새 곡 만들기: 사진 고르기 → 정리 → 저장
+function defaultTitle(file, n) {
+  const base = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+  return base && !looksLikeCameraName(base) ? base : `곡 ${n}`;
+}
+// 사진 여러 장 → 곡 여러 개. 한 곡이 두 장이면 곡 안에서 '장 추가'로 붙인다.
+async function createSongsFromFiles(files, startNo = 1) {
+  if (!files.length) return [];
+  toast(files.length > 1 ? `악보 ${files.length}장을 정리하고 있어요…` : '악보를 정리하고 있어요…');
+  const songs = [];
+  let padded = false;
+  for (let i = 0; i < files.length; i++) {
+    const sheet = await prepareSheet(files[i]);
+    padded = padded || sheet.padded;
+    const song = { id: uid(), title: defaultTitle(files[i], startNo + i), key: '', tempo: 'mid', verses: 2, bridge: true, lastForm: '', labels: [], sheets: [sheet], createdAt: Date.now() };
+    song.placement = { ...detectSlot(await bitmapOf(sheet)), page: 0 };
+    state.songs[song.id] = song;
+    await saveSong(song);
+    songs.push(song);
+  }
+  if (padded) toast('송폼 적을 자리가 좁아 위쪽에 여백을 조금 넣었어요');
+  const unnamed = songs.filter((s) => isPlaceholderTitle(s.title));
+  if (unnamed.length) autoTitles(unnamed);
+  return songs;
+}
+function movePage(dir) {
+  const ed = state.edit, song = ed.song, i = ed.page, j = i + dir;
+  if (j < 0 || j >= song.sheets.length) return;
+  [song.sheets[i], song.sheets[j]] = [song.sheets[j], song.sheets[i]];
+  (song.labels || []).forEach((l) => { const p = l.page || 0; if (p === i) l.page = j; else if (p === j) l.page = i; });
+  if (song.placement) { if (song.placement.page === i) song.placement.page = j; else if (song.placement.page === j) song.placement.page = i; }
+  ed.page = j; saveSong(song); render();
+}
+// 한 곡에 여러 장이 잘못 들어갔을 때: 1장만 남기고 나머지를 각각 새 곡으로
+async function splitPages() {
+  const ed = state.edit, song = ed.song, v = state.view;
+  if (!(await confirmSheet(`${song.sheets.length}장을 각각 다른 곡으로 나눌까요? 1장은 이 곡에 남고 나머지는 새 곡이 됩니다.`, '나누기'))) return;
+  const week = v.weekId ? weekOf(v.weekId) : null;
+  const at = week ? week.songs.findIndex((e) => e.id === v.entryId) : -1;
+  const newEntries = [];
+  for (let p = song.sheets.length - 1; p >= 1; p--) {
+    const sheet = song.sheets[p];
+    const ns = { id: uid(), title: `${looksLikeCameraName(song.title) && week ? `곡 ${at + 1}` : song.title}-${p + 1}`, key: '', tempo: 'mid', verses: 2, bridge: true, lastForm: '',
+      labels: (song.labels || []).filter((l) => (l.page || 0) === p).map((l) => ({ ...l, page: 0 })), sheets: [sheet], createdAt: Date.now() };
+    ns.placement = { ...detectSlot(await bitmapOf(sheet)), page: 0 };
+    state.songs[ns.id] = ns; await saveSong(ns);
+    newEntries.unshift({ id: uid(), songId: ns.id, form: '' });
+  }
+  song.sheets = [song.sheets[0]];
+  song.labels = (song.labels || []).filter((l) => (l.page || 0) === 0);
+  if (song.placement) song.placement.page = 0;
+  if (week && looksLikeCameraName(song.title)) song.title = `곡 ${at + 1}-1`;
+  await saveSong(song);
+  if (week) { week.songs.splice(at + 1, 0, ...newEntries); await saveWeek(week); }
+  ed.page = 0; render(); toast(`${newEntries.length + 1}곡으로 나눴어요`);
+}
+
+// ────────────────────────────── 동작 ──────────────────────────────
+const ACTIONS = {
+  home: () => go({ name: 'home' }),
+  prevMonth: () => { const [y, m] = state.month.split('-').map(Number); const d = new Date(y, m - 2, 1); state.month = monthOf(toISO(d)); render(); },
+  nextMonth: () => { const [y, m] = state.month.split('-').map(Number); const d = new Date(y, m, 1); state.month = monthOf(toISO(d)); render(); },
+  openLibrary: () => go({ name: 'library' }),
+  openWeek: (el) => go({ name: 'week', id: el.dataset.id }),
+
+  addWeek: () => {
+    const [y, m] = state.month.split('-').map(Number);
+    const used = new Set(state.weeks.map((w) => w.date));
+    // 이 달의 아직 안 쓴 첫 일요일을 기본값으로
+    let d = nextSunday(new Date(y, m - 1, 1));
+    while (used.has(toISO(d)) && d.getMonth() === m - 1) d.setDate(d.getDate() + 7);
+    const def = d.getMonth() === m - 1 ? toISO(d) : `${state.month}-01`;
+    openSheet(`<h2>어느 날 예배인가요?</h2><input type="date" id="wDate" value="${def}">
+      <div class="actions"><button class="btn" id="wNo">취소</button><button class="btn primary" id="wOk">추가</button></div>`, (bg) => {
+      $('#wOk', bg).onclick = async () => {
+        const date = $('#wDate', bg).value; if (!date) return;
+        const week = { id: uid(), date, target: 20, songs: [], createdAt: Date.now() };
+        state.weeks.push(week); await saveWeek(week);
+        state.month = monthOf(date); closeSheet(); go({ name: 'week', id: week.id });
+      };
+      $('#wNo', bg).onclick = closeSheet;
+    });
+  },
+  setTarget: async (el) => {
+    const w = weekOf(el.dataset.id);
+    const v = await askText('이 주 찬양 시간 목표 (분)', String(w.target || 20));
+    if (v === null) return;
+    w.target = clamp(parseInt(v, 10) || 20, 5, 90); saveWeek(w); render();
+  },
+  weekMenu: (el) => {
+    const w = weekOf(el.dataset.id);
+    menuSheet(fmtDate(w.date), [
+      { icon: '🖨', label: '인쇄', run: () => printWeek(w) },
+      { icon: '📅', label: '날짜 바꾸기', run: () => openSheet(`<h2>날짜</h2><input type="date" id="wDate" value="${w.date}"><div class="actions"><button class="btn" id="wNo">취소</button><button class="btn primary" id="wOk">저장</button></div>`, (bg) => {
+        $('#wOk', bg).onclick = () => { const v = $('#wDate', bg).value; if (v) { w.date = v; saveWeek(w); state.month = monthOf(v); } closeSheet(); render(); };
+        $('#wNo', bg).onclick = closeSheet;
+      }) },
+      { icon: '🔤', label: '악보에서 제목 자동으로 읽기', run: () => {
+        const all = w.songs.map((e) => songOf(e.songId)).filter(Boolean);
+        const need = all.filter((s) => isPlaceholderTitle(s.title));
+        if (!need.length) return toast('모든 곡에 이미 제목이 있어요. 다시 읽으려면 곡 메뉴에서 하세요');
+        autoTitles(need);
+      } },
+      { icon: '📋', label: '이 콘티 복사해서 새 주차 만들기', run: async () => {
+        const nw = { id: uid(), date: toISO(nextSunday(new Date(new Date(w.date).getTime() + 86400000))), target: w.target, songs: w.songs.map((e) => ({ ...e, id: uid() })), createdAt: Date.now() };
+        state.weeks.push(nw); await saveWeek(nw); state.month = monthOf(nw.date); go({ name: 'week', id: nw.id }); toast('복사했습니다. 날짜를 확인하세요');
+      } },
+      { icon: '🗑', label: '이 주차 삭제', danger: true, run: async () => {
+        if (!(await confirmSheet('이 주차 콘티를 삭제할까요?'))) return;
+        state.weeks = state.weeks.filter((x) => x.id !== w.id); await idbDel('weeks', w.id); go({ name: 'home' });
+      } },
+    ]);
+  },
+  addSong: (el) => {
+    const w = weekOf(el.dataset.id);
+    const inLib = Object.values(state.songs).filter((s) => !w.songs.some((e) => e.songId === s.id));
+    menuSheet('악보 추가', [
+      { icon: '📷', label: '악보 사진 넣기 (한 장 = 한 곡)', run: async () => {
+        const files = await pickFiles(); if (!files.length) return;
+        const songs = await createSongsFromFiles(files, w.songs.length + 1);
+        const entries = songs.map((s) => ({ id: uid(), songId: s.id, form: '' }));
+        w.songs.push(...entries); await saveWeek(w);
+        if (songs.length === 1) go({ name: 'song', songId: songs[0].id, weekId: w.id, entryId: entries[0].id });
+        else { render(); toast(`${songs.length}곡을 넣었어요. ✨ 전체 추천을 눌러보세요`); }
+      } },
+      { icon: '♪', label: `보관함에서 고르기 (${inLib.length}곡)`, run: () => {
+        if (!inLib.length) return toast('보관함에 아직 곡이 없습니다');
+        openSheet(`<h2>보관함에서 고르기</h2><div class="list">${inLib.sort((a, b) => a.title.localeCompare(b.title, 'ko')).map((s) => `<button class="lib-item" data-id="${s.id}"><div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div><div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div></button>`).join('')}</div>`, (bg) => {
+          $$('.lib-item', bg).forEach((b) => b.onclick = async () => {
+            const s = songOf(b.dataset.id);
+            w.songs.push({ id: uid(), songId: s.id, form: s.lastForm || '' });
+            await saveWeek(w); closeSheet(); render(); toast(`'${s.title}' 추가`);
+          });
+        });
+      } },
+    ]);
+  },
+  renameSong: async (el) => {
+    const s = songOf(el.dataset.id); if (!s) return;
+    const v = await askText('곡 제목', isPlaceholderTitle(s.title) ? '' : s.title, '예: 주님 말씀하시면');
+    if (v === null) return;
+    if (v.trim()) { s.title = v.trim(); saveSong(s); render(); }
+  },
+  openEntry: (el) => {
+    const w = weekOf(el.dataset.week); const e = w.songs.find((x) => x.id === el.dataset.entry);
+    if (!songOf(e.songId)) return toast('삭제된 곡입니다', true);
+    go({ name: 'song', songId: e.songId, weekId: w.id, entryId: e.id });
+  },
+  moveEntry: (el) => {
+    const w = weekOf(el.dataset.week); const i = w.songs.findIndex((x) => x.id === el.dataset.entry); const j = i + +el.dataset.dir;
+    if (j < 0 || j >= w.songs.length) return;
+    [w.songs[i], w.songs[j]] = [w.songs[j], w.songs[i]]; saveWeek(w); render();
+  },
+  removeEntry: async (el) => {
+    const w = weekOf(el.dataset.week);
+    w.songs = w.songs.filter((x) => x.id !== el.dataset.entry); saveWeek(w); render();
+  },
+  pdfWeek: (el) => pdfWeek(weekOf(el.dataset.id)),
+  printWeek: (el) => printWeek(weekOf(el.dataset.id)),
+
+  // ── 곡 편집 ──
+  back: () => { const v = state.view; go(v.weekId ? { name: 'week', id: v.weekId } : { name: 'library' }); },
+  openSong: (el) => go({ name: 'song', songId: el.dataset.id }),
+  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, Object.keys(state.songs).length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); },
+  navSong: (el) => {
+    const v = state.view; const w = weekOf(v.weekId);
+    const e = w.songs[w.songs.findIndex((x) => x.id === v.entryId) + +el.dataset.dir];
+    if (!e) return; if (!songOf(e.songId)) return toast('삭제된 곡입니다', true);
+    go({ name: 'song', songId: e.songId, weekId: w.id, entryId: e.id });
+  },
+  page: (el) => { state.edit.page = +el.dataset.i; state.edit.selected = null; render(); },
+  addPage: async () => {
+    const files = await pickFiles(); if (!files.length) return;
+    const song = state.edit.song;
+    for (const f of files) song.sheets.push(await prepareSheet(f));
+    if (!song.placement) song.placement = { ...detectSlot(await bitmapOf(song.sheets[0])), page: 0 };
+    await saveSong(song); state.edit.page = song.sheets.length - 1; render();
+  },
+  removePage: async () => {
+    const ed = state.edit; const song = ed.song;
+    if (!(await confirmSheet(`${ed.page + 1}장을 삭제할까요?`))) return;
+    song.sheets.splice(ed.page, 1);
+    song.labels = (song.labels || []).filter((l) => (l.page || 0) !== ed.page).map((l) => ({ ...l, page: l.page > ed.page ? l.page - 1 : l.page }));
+    if (song.placement && song.placement.page >= song.sheets.length) song.placement.page = 0;
+    ed.page = Math.max(0, ed.page - 1); await saveSong(song); render();
+  },
+  toggleLabel: () => { state.edit.mode = state.edit.mode === 'label' ? 'move' : 'label'; state.edit.selected = null; render(); },
+  labelText: (el) => { state.edit.labelText = el.dataset.t; render(); },
+  autoSlot: async () => {
+    const ed = state.edit; const song = ed.song;
+    song.placement = { ...detectSlot(await bitmapOf(song.sheets[ed.page])), page: ed.page };
+    saveSong(song); render(); toast('여백을 찾아 옮겼어요. 손가락으로 더 옮길 수 있어요');
+  },
+
+  addBlock: (el) => {
+    const blocks = parseForm(currentForm());
+    blocks.push({ name: el.dataset.name, repeat: 1, note: '' });
+    setForm(serializeForm(blocks)); state.edit.selChip = blocks.length - 1; render();
+  },
+  moreBlocks: () => { state.edit.more = true; render(); },
+  selChip: (el) => { const i = +el.dataset.i; state.edit.selChip = state.edit.selChip === i ? null : i; render(); },
+  chipMove: (el) => {
+    const ed = state.edit; const blocks = parseForm(currentForm()); const i = ed.selChip, j = i + +el.dataset.dir;
+    if (j < 0 || j >= blocks.length) return;
+    [blocks[i], blocks[j]] = [blocks[j], blocks[i]]; ed.selChip = j; setForm(serializeForm(blocks)); render();
+  },
+  chipRep: (el) => {
+    const blocks = parseForm(currentForm()); const b = blocks[state.edit.selChip]; const n = +el.dataset.n;
+    b.repeat = b.repeat === n ? 1 : n; setForm(serializeForm(blocks)); render();
+  },
+  chipNote: async () => {
+    const blocks = parseForm(currentForm()); const b = blocks[state.edit.selChip];
+    const v = await askText('메모 (예: 4마디, 반키 업)', b.note, '4마디'); if (v === null) return;
+    b.note = v.trim(); setForm(serializeForm(blocks)); render();
+  },
+  chipDel: () => { const blocks = parseForm(currentForm()); blocks.splice(state.edit.selChip, 1); state.edit.selChip = null; setForm(serializeForm(blocks)); render(); },
+  clearForm: async () => { if (await confirmSheet('송폼을 모두 지울까요?', '지우기')) { setForm(''); state.edit.selChip = null; render(); } },
+  typeForm: async () => {
+    const v = await askText('송폼 직접 입력', currentForm(), 'Intro-V1-C-V2-Cx2-outro'); if (v === null) return;
+    setForm(serializeForm(parseForm(v))); state.edit.more = false; render();
+  },
+  tempo: (el) => { state.edit.song.tempo = el.dataset.k; saveSong(state.edit.song); render(); },
+
+  suggest: () => {
+    const song = state.edit.song;
+    const opt = { verses: song.verses ?? 2, bridge: song.bridge ?? true, tempo: song.tempo || 'mid', minutes: 4 };
+    const seg = (key, items) => `<div class="seg" data-key="${key}">${items.map(([v, ko]) => `<button class="${String(opt[key]) === String(v) ? 'on' : ''}" data-v="${v}">${ko}</button>`).join('')}</div>`;
+    const draw = (bg) => {
+      const form = suggestForm(opt);
+      $('#sgBody', bg).innerHTML = `
+        <div class="field"><label>절이 몇 개인가요?</label>${seg('verses', [[1, '1절만'], [2, '2절'], [3, '3절']])}</div>
+        <div class="field"><label>브리지가 있나요?</label>${seg('bridge', [[true, '있어요'], [false, '없어요']])}</div>
+        <div class="field"><label>빠르기</label>${seg('tempo', [['fast', '빠른 곡'], ['mid', '보통'], ['slow', '느린 곡']])}</div>
+        <div class="field"><label>이 곡을 몇 분 정도?</label>${seg('minutes', [[3, '3분'], [4, '4분'], [5, '5분'], [6, '6분']])}</div>
+        <div class="card" style="margin:14px 0 0;font-weight:700;word-break:break-all">${formHtml(form) || '-'}<div class="muted small" style="font-weight:400;margin-top:4px">${fmtDur(estimateSecs(form, opt.tempo))} 예상</div></div>`;
+      $$('.seg button', bg).forEach((b) => b.onclick = () => {
+        const key = b.closest('.seg').dataset.key; let v = b.dataset.v;
+        if (key === 'verses' || key === 'minutes') v = +v; if (key === 'bridge') v = v === 'true';
+        opt[key] = v; draw(bg);
+      });
+    };
+    openSheet(`<h2>✨ 송폼 추천</h2><div id="sgBody"></div>
+      <div class="actions"><button class="btn" id="sgNo">취소</button><button class="btn primary" id="sgOk">이 송폼으로</button></div>`, (bg) => {
+      draw(bg);
+      $('#sgOk', bg).onclick = () => { Object.assign(song, { tempo: opt.tempo, verses: opt.verses, bridge: opt.bridge }); setForm(suggestForm(opt)); state.edit.selChip = null; closeSheet(); render(); toast('추천 송폼을 넣었어요. 블록을 눌러 고칠 수 있어요'); };
+      $('#sgNo', bg).onclick = closeSheet;
+    });
+  },
+
+  // 주차 전체: 목표 시간을 곡들에 나눠 주고 곡마다 송폼을 짠다
+  suggestWeek: (el) => {
+    const w = weekOf(el.dataset.id);
+    const items = w.songs.map((e) => ({ e, s: songOf(e.songId) })).filter((x) => x.s);
+    if (!items.length) return;
+    const opt = { target: w.target || 20, per: items.map(({ s }) => ({ verses: s.verses ?? 2, bridge: s.bridge ?? true, tempo: s.tempo || 'mid' })) };
+    const WEIGHT = { fast: 0.85, mid: 1, slow: 1.25 }; // 느린 곡이 시간을 더 가져간다
+    const plan = () => {
+      const usable = Math.max(60, opt.target * 60 - (items.length - 1) * 20);
+      const ws = opt.per.map((p) => WEIGHT[p.tempo] || 1); const sum = ws.reduce((a, b) => a + b, 0);
+      return opt.per.map((p, i) => { const form = suggestForm({ ...p, minutes: (usable * ws[i] / sum) / 60 }); return { form, secs: estimateSecs(form, p.tempo) }; });
+    };
+    const seg = (i, key, pairs) => `<div class="seg mini" data-i="${i}" data-key="${key}">${pairs.map(([v, ko]) => `<button class="${String(opt.per[i][key]) === String(v) ? 'on' : ''}" data-v="${v}">${ko}</button>`).join('')}</div>`;
+    const draw = (bg) => {
+      const res = plan();
+      const total = res.reduce((a, r) => a + r.secs, 0) + (items.length - 1) * 20;
+      $('#swBody', bg).innerHTML = `
+        <div class="field"><label>전체 시간 목표</label><div class="seg" id="swTarget">${[15, 20, 25, 30].map((m) => `<button class="${opt.target === m ? 'on' : ''}" data-m="${m}">${m}분</button>`).join('')}</div></div>
+        ${items.map(({ s }, i) => `<div class="sw-row">
+          <div class="row"><div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>
+            <div class="grow"><div class="t ellip">${i + 1}. ${h(s.title)}</div><div class="f">${formHtml(res[i].form)}</div><div class="muted small">${fmtDur(res[i].secs)}</div></div></div>
+          <div class="mini-row">${seg(i, 'verses', [[1, '1절'], [2, '2절'], [3, '3절']])}${seg(i, 'bridge', [[true, '브리지'], [false, '없음']])}${seg(i, 'tempo', [['fast', '빠름'], ['mid', '보통'], ['slow', '느림']])}</div>
+        </div>`).join('')}
+        <div class="card" style="margin:12px 0 0"><b>전체 ${fmtDur(total)}</b> <span class="muted small">· 곡 사이 전환 포함 · 목표 ${opt.target}분</span></div>`;
+      $$('#swTarget button', bg).forEach((b) => b.onclick = () => { opt.target = +b.dataset.m; draw(bg); });
+      $$('.seg.mini button', bg).forEach((b) => b.onclick = () => {
+        const sg = b.closest('.seg'); const i = +sg.dataset.i, key = sg.dataset.key; let v = b.dataset.v;
+        if (key === 'verses') v = +v; if (key === 'bridge') v = v === 'true';
+        opt.per[i][key] = v; draw(bg);
+      });
+    };
+    openSheet(`<h2>✨ 송폼 전체 추천</h2><p class="muted small" style="margin:-8px 0 12px">곡마다 절 수·브리지·빠르기만 골라주면 ${items.length}곡을 시간에 맞춰 나눠 짭니다. 한 번 고른 건 기억합니다.</p><div id="swBody"></div>
+      <div class="actions"><button class="btn" id="swNo">취소</button><button class="btn primary" id="swOk">모두 적용</button></div>`, (bg) => {
+      draw(bg);
+      $('#swOk', bg).onclick = async () => {
+        const res = plan();
+        items.forEach(({ e, s }, i) => { Object.assign(s, opt.per[i]); s.lastForm = res[i].form; e.form = res[i].form; saveSong(s); });
+        w.target = opt.target; await saveWeek(w); closeSheet(); render(); toast('송폼을 모두 넣었어요. 곡을 눌러 다듬으세요');
+      };
+      $('#swNo', bg).onclick = closeSheet;
+    });
+  },
+  pdfSong: () => pdfSong(state.edit.song, currentForm()),
+  songMenu: () => {
+    const song = state.edit.song;
+    const multi = song.sheets.length > 1;
+    menuSheet(song.title, [
+      { icon: '📝', label: '제목 바꾸기', run: async () => { const v = await askText('제목', song.title); if (v && v.trim()) { song.title = v.trim(); saveSong(song); render(); } } },
+      { icon: '🔤', label: '악보에서 제목 다시 읽기', run: () => autoTitles([song]) },
+      ...(multi ? [
+        { icon: '✂️', label: `장마다 다른 곡으로 나누기 (${song.sheets.length}곡으로)`, run: splitPages },
+        { icon: '◀', label: '이 장을 앞으로', run: () => movePage(-1) },
+        { icon: '▶', label: '이 장을 뒤로', run: () => movePage(1) },
+      ] : []),
+      { icon: '🏷', label: '이 장의 라벨 모두 지우기', run: () => { song.labels = (song.labels || []).filter((l) => (l.page || 0) !== state.edit.page); saveSong(song); render(); } },
+      { icon: '🗑', label: '이 곡을 보관함에서 삭제', danger: true, run: async () => {
+        if (!(await confirmSheet(`'${song.title}'을(를) 삭제할까요? 이 곡이 들어간 콘티에서도 사라집니다.`))) return;
+        delete state.songs[song.id]; await idbDel('songs', song.id);
+        for (const w of state.weeks) { const before = w.songs.length; w.songs = w.songs.filter((e) => e.songId !== song.id); if (w.songs.length !== before) saveWeek(w); }
+        go(state.view.weekId ? { name: 'week', id: state.view.weekId } : { name: 'library' });
+      } },
+    ]);
+  },
+
+  // ── 설정: 백업 ──
+  openSettings: () => menuSheet('설정', [
+    { icon: '💾', label: '백업 파일 내려받기', run: backupExport },
+    { icon: '📂', label: '백업 파일 불러오기', run: backupImport },
+    { icon: 'ℹ️', label: `곡 ${Object.keys(state.songs).length}개 · 주차 ${state.weeks.length}개 저장됨`, run: () => {} },
+  ]),
+};
+
+// ── 백업: 이 기기 브라우저에만 저장되므로, 기기를 바꾸거나 데이터를 지웠을 때를 위한 안전장치 ──
+const blobToDataURL = (b) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+async function backupExport() {
+  toast('백업을 만들고 있어요…');
+  const songs = [];
+  for (const s of Object.values(state.songs)) {
+    const rec = toRecord({ ...s, sheets: [] });
+    rec.sheets = [];
+    for (const sh of s.sheets) rec.sheets.push({ w: sh.w, h: sh.h, data: await blobToDataURL(sh.blob) });
+    songs.push(rec);
+  }
+  const payload = { app: 'konti', version: 1, exportedAt: new Date().toISOString(), songs, weeks: state.weeks.map(toRecord) };
+  download(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `콘티 백업 ${toISO(new Date())}.json`);
+}
+async function backupImport() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (data.app !== 'konti') throw new Error('콘티 백업 파일이 아닙니다');
+      if (!(await confirmSheet(`곡 ${data.songs.length}개, 주차 ${data.weeks.length}개를 불러올까요? 같은 곡은 덮어씁니다.`, '불러오기'))) return;
+      for (const s of data.songs) {
+        const sheets = [];
+        for (const sh of s.sheets) { const blob = await (await fetch(sh.data)).blob(); sheets.push({ blob, w: sh.w, h: sh.h }); }
+        const song = { ...s, sheets };
+        state.songs[song.id] = song; await saveSong(song);
+      }
+      for (const w of data.weeks) { const i = state.weeks.findIndex((x) => x.id === w.id); if (i >= 0) state.weeks[i] = w; else state.weeks.push(w); await saveWeek(w); }
+      render(); toast('불러왔습니다');
+    } catch (e) { toast(e.message || '불러오지 못했습니다', true); }
+  };
+  inp.click();
+}
+
+// ────────────────────────────── 시작 ──────────────────────────────
+(async function init() {
+  try {
+    db = await openDB();
+    const [songs, weeks] = await Promise.all([idbAll('songs'), idbAll('weeks')]);
+    for (const s of songs) state.songs[s.id] = { ...s, sheets: (s.sheets || []).map((sh) => ({ ...sh })) };
+    state.weeks = weeks;
+    // 이번 달에 콘티가 없고 다른 달에 있으면 가장 최근 달을 보여준다
+    if (!weeks.some((w) => monthOf(w.date) === state.month) && weeks.length) {
+      state.month = monthOf(weeks.map((w) => w.date).sort().reverse()[0]);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('저장 공간을 열 수 없습니다. 다른 브라우저로 열어보세요', true);
+  }
+  render();
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+})();
+</script>
+</body>
+</html>
