@@ -183,6 +183,9 @@
   .sw-row .t { font-weight: 700; }
   .sw-row .f { font-size: 12px; word-break: break-all; }
 
+  .tt-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .tt-img { width: 150px; height: 64px; flex: none; border-radius: 8px; border: 1px solid var(--line); background: #fff no-repeat top center / 100% auto; }
+
   .toast { position: fixed; left: 50%; bottom: calc(110px + var(--safe-b)); transform: translateX(-50%) translateY(10px); background: #2b3038; color: #fff; border: 1px solid #3a4049; padding: 12px 18px; border-radius: 12px; font-size: 15px; opacity: 0; pointer-events: none; transition: .18s; z-index: 100; max-width: 88vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .toast.err { background: var(--danger); }
@@ -582,86 +585,35 @@ async function renderSongBlobs(song, form) {
   return out;
 }
 
-// ────────────────────────────── 제목 읽기 (OCR) ──────────────────────────────
-// 악보 맨 위 제목 띠만 잘라 문자 인식한다. 인식 엔진은 처음 쓸 때 한 번 내려받고 브라우저가 기억한다.
+// ────────────────────────────── 제목 입력 ──────────────────────────────
 // 아직 진짜 제목이 아닌 것: "곡 3", "곡 2-1", 사진 앱 이름. (영어 제목 "Wake"는 진짜 제목)
 const isPlaceholderTitle = (t) => /^곡 \d+(-\d+)?$/.test(t || '') || /kakaotalk|^img|^dsc|screenshot|^photo|^[\d\s]+$/i.test(t || '');
-let ocrWorkerP = null;
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    const el = document.createElement('script');
-    el.src = src; el.onload = res; el.onerror = () => rej(new Error('script load failed'));
-    document.head.appendChild(el);
+
+// 사진을 넣은 직후 제목을 적는 시트. 악보 윗부분을 보여주니 보고 그대로 옮겨 적으면 된다.
+// (자동 인식은 한글 정확도가 낮아 뺐다. 나중에 여기서 초안을 채워주는 식으로 붙일 수 있다.)
+function titleSheet(songs) {
+  const list = (songs || []).filter((s) => s && s.sheets.length);
+  if (!list.length) return;
+  openSheet(`<h2>곡 제목을 적어주세요</h2>
+    <p class="muted small" style="margin:-8px 0 12px">악보 윗부분을 보고 제목만 적으면 됩니다. 비워두면 나중에 목록에서 제목을 눌러 적을 수 있어요.</p>
+    <div class="tt-list">${list.map((s, i) => `<div class="tt-row">
+      <div class="tt-img" style="background-image:url('${sheetUrl(s.sheets[0])}')"></div>
+      <input type="text" data-i="${i}" value="${isPlaceholderTitle(s.title) ? '' : h(s.title)}" placeholder="${h(s.title)}" enterkeyhint="next" autocomplete="off">
+    </div>`).join('')}</div>
+    <div class="actions"><button class="btn" id="ttNo">나중에</button><button class="btn primary" id="ttOk">저장</button></div>`, (bg) => {
+    const inputs = $$('input', bg);
+    inputs.forEach((inp, i) => inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); (inputs[i + 1] || $('#ttOk', bg)).focus(); }
+    }));
+    $('#ttOk', bg).onclick = async () => {
+      for (const inp of inputs) {
+        const song = list[+inp.dataset.i]; const v = inp.value.trim();
+        if (v && v !== song.title) { song.title = v; await saveSong(song); }
+      }
+      closeSheet(); render();
+    };
+    $('#ttNo', bg).onclick = closeSheet;
   });
-}
-async function ocrWorker() {
-  if (!ocrWorkerP) {
-    ocrWorkerP = (async () => {
-      if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-      const w = await Tesseract.createWorker('kor+eng', 1, { logger: () => {} });
-      await w.setParameters({ tessedit_pageseg_mode: '6' }); // 한 덩어리 텍스트
-      return w;
-    })().catch((e) => { ocrWorkerP = null; throw e; });
-  }
-  return ocrWorkerP;
-}
-// 제목 띠: 맨 위 여백 다음에 나오는 첫 글자 덩어리
-function titleBandCanvas(img) {
-  const rows = rowDarkness(img);
-  const H = rows.length, scale = img.height / H;
-  const tStart = rows.findIndex((r) => r >= 0.006);
-  if (tStart < 0) return null;
-  let tEnd = tStart;
-  while (tEnd < H && rows[tEnd] >= 0.006) tEnd++;
-  const y0 = Math.max(0, Math.round((tStart - 2) * scale));
-  const y1 = Math.min(img.height, Math.round((tEnd + 2) * scale));
-  const bandH = y1 - y0;
-  if (bandH < 8) return null;
-  const up = Math.min(3, Math.max(1, 1600 / img.width)); // 작은 사진은 키워서 읽는다
-  const c = document.createElement('canvas');
-  c.width = Math.round(img.width * up); c.height = Math.round(bandH * up);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-  ctx.drawImage(img, 0, y0, img.width, bandH, 0, 0, c.width, c.height);
-  return c;
-}
-// 큰 글자만 남긴다 (같은 줄의 작사·작곡자, 출판사 표기는 작아서 걸러진다)
-function cleanTitle(words) {
-  if (!words.length) return '';
-  const hgt = (w) => w.bbox.y1 - w.bbox.y0;
-  const maxH = Math.max(...words.map(hgt));
-  let t = words.filter((w) => hgt(w) >= maxH * 0.6)
-    .map((w) => w.text.replace(/[^가-힣A-Za-z0-9'!?,.()\-]/g, '')).filter(Boolean).join(' ').trim();
-  // 한글 인식기는 "말씀"을 "말 씀"으로 쪼개곤 하고, 글자 간격으로는 진짜 띄어쓰기와 구분이 안 된다.
-  // 한글 사이 공백은 모두 붙여 "주님말씀하시면"처럼 일관되게 낸다. 영어 단어 사이 공백은 남긴다.
-  t = t.replace(/([가-힣])\s+(?=[가-힣])/g, '$1');
-  return t.length >= 2 && /[가-힣A-Za-z]/.test(t) ? t.slice(0, 40) : '';
-}
-async function readTitle(song) {
-  const img = await bitmapOf(song.sheets[0]);
-  const band = titleBandCanvas(img);
-  if (!band) return '';
-  const w = await ocrWorker();
-  const { data } = await w.recognize(band);
-  return cleanTitle(data.words || []);
-}
-// 여러 곡의 제목을 차례로 읽어 넣는다. 읽히는 대로 화면을 갱신한다.
-async function autoTitles(songs, { quiet = false } = {}) {
-  const targets = songs.filter((s) => s && s.sheets.length);
-  if (!targets.length) return 0;
-  let done = 0;
-  try {
-    if (!quiet) toast('악보에서 제목을 읽고 있어요…');
-    for (const s of targets) {
-      const t = await readTitle(s);
-      if (t) { s.title = t; await saveSong(s); done++; render(); }
-    }
-    if (!quiet) toast(done ? `제목 ${done}개를 읽었어요. 틀리면 제목을 눌러 고치세요` : '제목을 읽지 못했어요. 제목을 눌러 직접 입력하세요', !done);
-  } catch (e) {
-    console.error(e);
-    if (!quiet) toast('인터넷이 안 돼 제목을 읽지 못했어요. 제목을 눌러 직접 입력하세요', true);
-  }
-  return done;
 }
 
 // ────────────────────────────── 공유 · 인쇄 ──────────────────────────────
@@ -1106,8 +1058,6 @@ async function createSongsFromFiles(files, startNo = 1) {
     songs.push(song);
   }
   if (padded) toast('송폼 적을 자리가 좁아 위쪽에 여백을 조금 넣었어요');
-  const unnamed = songs.filter((s) => isPlaceholderTitle(s.title));
-  if (unnamed.length) autoTitles(unnamed);
   return songs;
 }
 function movePage(dir) {
@@ -1140,6 +1090,7 @@ async function splitPages() {
   await saveSong(song);
   if (week) { week.songs.splice(at + 1, 0, ...newEntries); await saveWeek(week); }
   ed.page = 0; render(); toast(`${newEntries.length + 1}곡으로 나눴어요`);
+  titleSheet([song, ...newEntries.map((e) => songOf(e.songId))]);
 }
 
 // ────────────────────────────── 동작 ──────────────────────────────
@@ -1182,12 +1133,7 @@ const ACTIONS = {
         $('#wOk', bg).onclick = () => { const v = $('#wDate', bg).value; if (v) { w.date = v; saveWeek(w); state.month = monthOf(v); } closeSheet(); render(); };
         $('#wNo', bg).onclick = closeSheet;
       }) },
-      { icon: '🔤', label: '악보에서 제목 자동으로 읽기', run: () => {
-        const all = w.songs.map((e) => songOf(e.songId)).filter(Boolean);
-        const need = all.filter((s) => isPlaceholderTitle(s.title));
-        if (!need.length) return toast('모든 곡에 이미 제목이 있어요. 다시 읽으려면 곡 메뉴에서 하세요');
-        autoTitles(need);
-      } },
+      { icon: '🔤', label: '제목 한 번에 적기', run: () => titleSheet(w.songs.map((e) => songOf(e.songId))) },
       { icon: '📋', label: '이 콘티 복사해서 새 주차 만들기', run: async () => {
         const nw = { id: uid(), date: toISO(nextSunday(new Date(new Date(w.date).getTime() + 86400000))), target: w.target, songs: w.songs.map((e) => ({ ...e, id: uid() })), createdAt: Date.now() };
         state.weeks.push(nw); await saveWeek(nw); state.month = monthOf(nw.date); go({ name: 'week', id: nw.id }); toast('복사했습니다. 날짜를 확인하세요');
@@ -1208,7 +1154,8 @@ const ACTIONS = {
         const entries = songs.map((s) => ({ id: uid(), songId: s.id, form: '' }));
         w.songs.push(...entries); await saveWeek(w);
         if (songs.length === 1) go({ name: 'song', songId: songs[0].id, weekId: w.id, entryId: entries[0].id });
-        else { render(); toast(`${songs.length}곡을 넣었어요. ✨ 전체 추천을 눌러보세요`); }
+        else render();
+        titleSheet(songs);
       } },
       { icon: '♪', label: `보관함에서 고르기 (${inLib.length}곡)`, run: () => {
         if (!inLib.length) return toast('보관함에 아직 곡이 없습니다');
@@ -1248,7 +1195,7 @@ const ACTIONS = {
   // ── 곡 편집 ──
   back: () => { const v = state.view; go(v.weekId ? { name: 'week', id: v.weekId } : { name: 'library' }); },
   openSong: (el) => go({ name: 'song', songId: el.dataset.id }),
-  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, Object.keys(state.songs).length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); },
+  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, Object.keys(state.songs).length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); },
   navSong: (el) => {
     const v = state.view; const w = weekOf(v.weekId);
     const e = w.songs[w.songs.findIndex((x) => x.id === v.entryId) + +el.dataset.dir];
@@ -1382,7 +1329,6 @@ const ACTIONS = {
     const multi = song.sheets.length > 1;
     menuSheet(song.title, [
       { icon: '📝', label: '제목 바꾸기', run: async () => { const v = await askText('제목', song.title); if (v && v.trim()) { song.title = v.trim(); saveSong(song); render(); } } },
-      { icon: '🔤', label: '악보에서 제목 다시 읽기', run: () => autoTitles([song]) },
       ...(multi ? [
         { icon: '✂️', label: `장마다 다른 곡으로 나누기 (${song.sheets.length}곡으로)`, run: splitPages },
         { icon: '◀', label: '이 장을 앞으로', run: () => movePage(-1) },
