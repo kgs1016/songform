@@ -186,6 +186,10 @@
   .tt-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .tt-img { width: 150px; height: 64px; flex: none; border-radius: 8px; border: 1px solid var(--line); background: #fff no-repeat top center / 100% auto; }
 
+  .card-more { width: 38px; height: 38px; border-radius: 10px; color: var(--muted); font-size: 18px; flex: none; display: grid; place-items: center; }
+  .card-more:active { background: var(--bg); }
+  .lib-item { cursor: pointer; }
+
   .toast { position: fixed; left: 50%; bottom: calc(110px + var(--safe-b)); transform: translateX(-50%) translateY(10px); background: #2b3038; color: #fff; border: 1px solid #3a4049; padding: 12px 18px; border-radius: 12px; font-size: 15px; opacity: 0; pointer-events: none; transition: .18s; z-index: 100; max-width: 88vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .toast.err { background: var(--danger); }
@@ -730,7 +734,7 @@ function viewHome() {
       return `<div class="th" ${s && s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>`;
     }).join('');
     return `<div class="card tap week-card" data-act="openWeek" data-id="${w.id}">
-      <div class="row"><div class="date grow">${weekTitle(w)} 콘티</div><div class="muted small">${fmtDate(w.date)}</div></div>
+      <div class="row"><div class="date grow">${weekTitle(w)} 콘티</div><div class="muted small">${fmtDate(w.date)}</div><button class="card-more" data-act="weekMenu" data-id="${w.id}" title="메뉴">⋯</button></div>
       ${w.songs.length
         ? `<div class="thumbs">${thumbs}</div><div class="time ${over ? 'over' : ''}">${w.songs.length}곡 · ${fmtDur(total)} · 목표 ${w.target || 20}분</div>`
         : '<div class="muted small" style="margin-top:6px">아직 악보가 없습니다</div>'}
@@ -977,10 +981,10 @@ async function redraw() {
 // ── 보관함 ──
 function viewLibrary() {
   const songs = Object.values(state.songs).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const items = songs.map((s) => `<button class="lib-item" data-act="openSong" data-id="${s.id}">
+  const items = songs.map((s) => `<div class="lib-item" data-act="openSong" data-id="${s.id}">
       <div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>
       <div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div>
-      <span class="muted">›</span></button>`).join('');
+      <button class="card-more" data-act="deleteSong" data-id="${s.id}" title="삭제">🗑</button></div>`).join('');
   return `
     <div class="top">
       <button class="icon" data-act="home">‹</button>
@@ -1093,6 +1097,17 @@ async function splitPages() {
   titleSheet([song, ...newEntries.map((e) => songOf(e.songId))]);
 }
 
+// 곡을 보관함에서 지우고, 그 곡이 들어간 모든 주차 콘티에서도 뺀다
+async function deleteSongEverywhere(song) {
+  delete state.songs[song.id];
+  await idbDel('songs', song.id);
+  for (const w of state.weeks) {
+    const n = w.songs.length;
+    w.songs = w.songs.filter((e) => e.songId !== song.id);
+    if (w.songs.length !== n) await saveWeek(w);
+  }
+}
+
 // ────────────────────────────── 동작 ──────────────────────────────
 const ACTIONS = {
   home: () => go({ name: 'home' }),
@@ -1185,9 +1200,19 @@ const ACTIONS = {
     if (j < 0 || j >= w.songs.length) return;
     [w.songs[i], w.songs[j]] = [w.songs[j], w.songs[i]]; saveWeek(w); render();
   },
-  removeEntry: async (el) => {
+  removeEntry: (el) => {
     const w = weekOf(el.dataset.week);
-    w.songs = w.songs.filter((x) => x.id !== el.dataset.entry); saveWeek(w); render();
+    const entry = w.songs.find((x) => x.id === el.dataset.entry);
+    const song = songOf(entry.songId);
+    const remove = async () => { w.songs = w.songs.filter((x) => x.id !== entry.id); await saveWeek(w); render(); };
+    if (!song) return remove();
+    menuSheet(song.title, [
+      { icon: '➖', label: '이 주 콘티에서만 빼기', run: () => { remove(); toast('콘티에서 뺐어요. 곡은 보관함에 남아 있어요'); } },
+      { icon: '🗑', label: '곡 자체를 삭제 (보관함에서도)', danger: true, run: async () => {
+        if (!(await confirmSheet(`'${song.title}'을(를) 완전히 삭제할까요? 다른 주 콘티에서도 사라집니다.`))) return;
+        await deleteSongEverywhere(song); render(); toast('삭제했어요');
+      } },
+    ]);
   },
   pdfWeek: (el) => pdfWeek(weekOf(el.dataset.id)),
   printWeek: (el) => printWeek(weekOf(el.dataset.id)),
@@ -1195,6 +1220,12 @@ const ACTIONS = {
   // ── 곡 편집 ──
   back: () => { const v = state.view; go(v.weekId ? { name: 'week', id: v.weekId } : { name: 'library' }); },
   openSong: (el) => go({ name: 'song', songId: el.dataset.id }),
+  deleteSong: async (el) => {
+    const song = songOf(el.dataset.id); if (!song) return;
+    const used = state.weeks.filter((w) => w.songs.some((e) => e.songId === song.id)).length;
+    if (!(await confirmSheet(`'${song.title}'을(를) 삭제할까요?${used ? ` 콘티 ${used}개에서도 빠집니다.` : ''}`))) return;
+    await deleteSongEverywhere(song); render(); toast('삭제했어요');
+  },
   newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, Object.keys(state.songs).length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); },
   navSong: (el) => {
     const v = state.view; const w = weekOf(v.weekId);
@@ -1335,10 +1366,14 @@ const ACTIONS = {
         { icon: '▶', label: '이 장을 뒤로', run: () => movePage(1) },
       ] : []),
       { icon: '🏷', label: '이 장의 라벨 모두 지우기', run: () => { song.labels = (song.labels || []).filter((l) => (l.page || 0) !== state.edit.page); saveSong(song); render(); } },
-      { icon: '🗑', label: '이 곡을 보관함에서 삭제', danger: true, run: async () => {
-        if (!(await confirmSheet(`'${song.title}'을(를) 삭제할까요? 이 곡이 들어간 콘티에서도 사라집니다.`))) return;
-        delete state.songs[song.id]; await idbDel('songs', song.id);
-        for (const w of state.weeks) { const before = w.songs.length; w.songs = w.songs.filter((e) => e.songId !== song.id); if (w.songs.length !== before) saveWeek(w); }
+      ...(state.view.weekId ? [{ icon: '➖', label: '이 주 콘티에서만 빼기', run: async () => {
+        const w = weekOf(state.view.weekId);
+        w.songs = w.songs.filter((e) => e.id !== state.view.entryId); await saveWeek(w);
+        go({ name: 'week', id: w.id }); toast('콘티에서 뺐어요. 곡은 보관함에 남아 있어요');
+      } }] : []),
+      { icon: '🗑', label: '곡 자체를 삭제 (보관함에서도)', danger: true, run: async () => {
+        if (!(await confirmSheet(`'${song.title}'을(를) 완전히 삭제할까요? 이 곡이 들어간 콘티에서도 사라집니다.`))) return;
+        await deleteSongEverywhere(song);
         go(state.view.weekId ? { name: 'week', id: state.view.weekId } : { name: 'library' });
       } },
     ]);
