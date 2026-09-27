@@ -203,10 +203,62 @@
     #print img:last-child { page-break-after: auto; break-after: auto; }
     @page { margin: 8mm; }
   }
+
+  input[type=search] { width:100%; min-height:48px; padding:10px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  .save-status { position:fixed; top:0; left:0; right:0; z-index:60; min-height:24px; padding:4px 12px; text-align:center; background:#17271f; color:#a4ddbb; font-size:12px; }
+  .save-status.failed { background:#572527; color:#fff; }
+  .save-status button { text-decoration:underline; padding:0 8px; font-weight:700; }
+  body { padding-top:26px; }
+  .top { top:26px; }
+  .top h1 button { font-weight:inherit; }
+  .edit-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .export-note { margin:10px 0; overflow-wrap:anywhere; }
+  .preview-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:14px 0; }
+  .preview-pages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .preview-page { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--card); }
+  .preview-page.expanded { grid-column:1 / -1; }
+  .preview-page.expanded img { cursor:zoom-out; }
+  [hidden] { display:none !important; }
+  .preview-page img { display:block; width:100%; height:auto; background:white; cursor:zoom-in; }
+  .preview-page.excluded img { opacity:.35; }
+  .preview-check { display:flex; align-items:center; gap:8px; min-height:48px; padding:8px; font-size:13px; }
+  input[type=checkbox] { width:22px; height:22px; flex:none; accent-color:var(--accent); }
+  .preview-actions { display:flex; flex-wrap:wrap; gap:8px; position:sticky; bottom:-22px; padding:14px 0; background:var(--bg); }
+  .preview-actions .btn { flex:1; text-align:center; text-decoration:none; }
+  .disabled { pointer-events:none; opacity:.4; }
+  .file-name { overflow-wrap:anywhere; margin-top:8px; }
+  .import-page { display:grid; grid-template-columns:90px 1fr; gap:12px; align-items:center; margin:12px 0; }
+  .import-page img { width:90px; max-height:130px; object-fit:contain; background:#fff; }
+  .import-page label { display:flex; align-items:center; gap:8px; min-height:44px; }
+  .import-page input[type=text]:disabled { opacity:.35; }
+  .bottom .inner { flex-wrap:wrap; }
+  @media (max-width:420px) { .preview-pages { grid-template-columns:1fr; } }
+
+
+  body.modal-open { overflow:hidden; }
+  #app.editing { padding-bottom:calc(150px + var(--safe-b)); }
+  .song-bottom .inner { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .preview-head { position:sticky; top:-18px; z-index:2; background:var(--card); padding:12px 0; }
+  .preview-head h2 { margin:0; }
+  .preview-actions .btn { white-space:nowrap; padding:12px 8px; font-size:14px; }
+  .preview-actions .primary { flex:2; }
+  .toast { width:max-content; max-width:calc(100vw - 32px); }
+  @media print { body { padding-top:0; } }
+
+  .form-reuse { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 16px; }
+  textarea { width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--text); resize:vertical; line-height:1.6; }
+  .form-comparison { border:1px solid var(--line); border-radius:12px; padding:14px; margin:14px 0; overflow-wrap:anywhere; line-height:1.7; }
+  .form-comparison .muted:not(:first-child) { margin-top:12px; }
+  .form-history { margin-top:12px; }
+  .form-history-item { display:block; width:100%; text-align:left; padding:14px; margin:8px 0; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+  .form-history-item:hover { border-color:var(--accent); }
+  .history-form { margin-top:8px; overflow-wrap:anywhere; }
+  .same-song { font-size:12px; color:var(--accent); }
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
 <div id="toast" class="toast"></div>
 <div id="print"></div>
 <input id="filePick" type="file" accept="image/*" multiple hidden>
@@ -222,6 +274,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+window.addEventListener('unhandledrejection', e => { e.preventDefault(); reportError(e.reason); });
+function reportError(error) { console.error(error); toast(error.message || '작업을 완료하지 못했습니다. 다시 시도하세요.', true); }
 let toastTimer;
 function toast(msg, err = false) {
   const el = $('#toast');
@@ -242,9 +296,10 @@ const toISO = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(
 const monthOf = (iso) => (iso || '').slice(0, 7);
 // 교회에서 부르는 식: 9월 둘째 일요일 → "9월 2주차"
 function weekTitle(w) {
+  if (w.title?.trim()) return w.title.trim();
   if (!w.date) return '날짜 없음';
   const [, m, d] = w.date.split('-').map(Number);
-  return `${m}월 ${Math.ceil(d / 7)}주차`;
+  return `${m}월 ${Math.ceil(d / 7)}주차 콘티`;
 }
 // 사진 앱이 붙인 이름(KakaoTalk_2026…, IMG_0123)은 곡 제목이 아니다
 const looksLikeCameraName = (t) => !/[가-힣]/.test(t) || /kakaotalk|img|dsc|screenshot|photo/i.test(t);
@@ -395,14 +450,80 @@ function toRecord(obj) {
 }
 function songRecord(song) {
   const rec = toRecord({ ...song, sheets: [] });
-  rec.sheets = song.sheets.map((s) => ({ blob: s.blob, w: s.w, h: s.h }));
+  rec.sheets = song.sheets.map((s) => ({ blob: s.blob, w: s.w, h: s.h, excluded: !!s.excluded }));
   return rec;
 }
-const saveSong = (song) => { song.updatedAt = Date.now(); return idbPut('songs', songRecord(song)); };
-const saveWeek = (week) => { week.updatedAt = Date.now(); return idbPut('weeks', toRecord(week)); };
+// All writes are tracked, including calls from drag/input handlers. Failed records
+// remain in memory for retry; exporting waits for confirmed transactions.
+let saveTail = Promise.resolve(), pendingSaves = 0;
+const failedWrites = new Map();
+function updateSaveStatus() {
+  const el = $('#saveStatus');
+  if (!el) return;
+  if (!state.loaded) { el.classList.add('failed'); el.innerHTML = '저장 공간을 열지 못했어요 <button data-act=retrySave>다시 열기</button>'; return; }
+  el.classList.toggle('failed', failedWrites.size > 0);
+  el.innerHTML = failedWrites.size
+    ? '저장 실패 · 이 화면을 닫지 마세요 <button data-act="retrySave">다시 시도</button>'
+    : pendingSaves ? '저장 중…' : '이 기기에 저장됨';
+}
+function persistRecords(records) {
+  if (!records.length) return Promise.resolve(true);
+  pendingSaves++; updateSaveStatus();
+  const task = saveTail.then(() => new Promise((resolve, reject) => {
+    const t = db.transaction([...new Set(records.map(r => r.store))], 'readwrite');
+    t.oncomplete = resolve;
+    t.onerror = () => reject(t.error || new Error('저장 실패'));
+    t.onabort = () => reject(t.error || new Error('저장 취소'));
+    try {
+      records.forEach(({ store, value, remove }) => remove ? t.objectStore(store).delete(value.id) : t.objectStore(store).put(value));
+    } catch (error) { t.abort(); reject(error); }
+  })).then(() => {
+    records.forEach(r => failedWrites.delete(`${r.store}:${r.value.id ?? r.value.key}`));
+    return true;
+  }).catch(error => {
+    console.error(error);
+    records.forEach(r => failedWrites.set(`${r.store}:${r.value.id ?? r.value.key}`, r));
+    return false;
+  }).finally(() => { pendingSaves--; updateSaveStatus(); });
+  saveTail = task;
+  return task;
+}
+function touch(record) { record.updatedAt = Math.max(Date.now(), (record.updatedAt || 0) + 1); }
+function saveSong(song) {
+  touch(song);
+  const records = [{ store: 'songs', value: songRecord(song) }];
+  const week = song.ownerWeekId && weekOf(song.ownerWeekId);
+  if (week) { touch(week); records.push({ store: 'weeks', value: toRecord(week) }); }
+  return persistRecords(records);
+}
+function saveWeek(week) {
+  touch(week);
+  return persistRecords([{ store: 'weeks', value: toRecord(week) }]);
+}
+async function flushSaves() {
+  let tail;
+  do { tail = saveTail; await tail; } while (tail !== saveTail);
+  if (failedWrites.size) throw new Error('저장에 실패했습니다. 상단의 다시 시도를 누른 뒤 내보내세요.');
+}
+async function retrySaves() {
+  if (!state.loaded) { location.reload(); return; }
+  let tail;
+  do { tail = saveTail; await tail; } while (tail !== saveTail);
+  if (db) db.close();
+  db = await openDB();
+  const records = [...failedWrites.values()];
+  if (records.length) await persistRecords(records);
+  await flushSaves();
+  render(); toast('저장했습니다');
+}
+window.addEventListener('beforeunload', e => {
+  if (pendingSaves || failedWrites.size) { e.preventDefault(); e.returnValue = ''; }
+});
 
 // ────────────────────────────── 상태 ──────────────────────────────
 const state = {
+  loaded: false,
+  formClipboard: null,
   songs: {},            // id → song {id,title,key,tempo,lastForm,placement,labels,sheets:[{blob,w,h,url}]}
   weeks: [],            // {id,date,target,songs:[{id,songId,form}]}
   month: monthOf(toISO(new Date())),
@@ -411,6 +532,40 @@ const state = {
   sheet: null,          // 열려 있는 시트(모달)
 };
 const songOf = (id) => state.songs[id];
+const librarySongs = () => Object.values(state.songs).filter(s => !s.ownerWeekId);
+const entryForm = (entry, song = songOf(entry.songId)) => entry.form ?? song?.lastForm ?? '';
+function copySongForWeek(source, week, form = source.lastForm || '') {
+  return { ...songRecord(source), id: uid(), sourceSongId: source.sourceSongId || source.id,
+    ownerWeekId: week.id, lastForm: form, createdAt: Date.now(), updatedAt: Date.now(), lastExport: null };
+}
+async function attachSongs(week, sources) {
+  const copies = sources.map(s => copySongForWeek(s, week));
+  const entries = copies.map(s => ({ id: uid(), songId: s.id, form: s.lastForm }));
+  copies.forEach(s => state.songs[s.id] = s);
+  week.songs.push(...entries); touch(week);
+  await persistRecords([...copies.map(s => ({ store: 'songs', value: songRecord(s) })),
+    { store: 'weeks', value: toRecord(week) }]);
+  await flushSaves();
+  return entries;
+}
+// Upgrade existing weeks atomically: retain library originals and detach every
+// weekly arrangement, including intentionally empty forms.
+async function isolateExistingWeeks() {
+  const records = [];
+  for (const week of state.weeks) {
+    let changed = false;
+    for (const entry of week.songs) {
+      const source = songOf(entry.songId);
+      if (!source || source.ownerWeekId === week.id) continue;
+      const form = entryForm(entry, source);
+      const copy = copySongForWeek(source, week, form);
+      state.songs[copy.id] = copy; entry.songId = copy.id; entry.form = form;
+      records.push({ store: 'songs', value: songRecord(copy) }); changed = true;
+    }
+    if (changed) records.push({ store: 'weeks', value: toRecord(week) });
+  }
+  if (records.length) { await persistRecords(records); await flushSaves(); }
+}
 const weekOf = (id) => state.weeks.find((w) => w.id === id);
 function sheetUrl(sheet) {
   if (!sheet.url) sheet.url = URL.createObjectURL(sheet.blob);
@@ -421,7 +576,7 @@ function weekSecs(week) {
   for (const e of week.songs) {
     const s = songOf(e.songId);
     if (!s) continue;
-    const secs = estimateSecs(e.form || s.lastForm, s.tempo);
+    const secs = estimateSecs(entryForm(e, s), s.tempo);
     if (secs) { total += secs; known++; }
   }
   // 곡 사이 전환 약 20초
@@ -432,9 +587,10 @@ function weekSecs(week) {
 function loadImage(blob) {
   return new Promise((res, rej) => {
     const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = () => rej(new Error('이미지를 읽을 수 없습니다'));
-    img.src = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('이미지를 읽을 수 없습니다')); };
+    img.src = url;
   });
 }
 function canvasToBlob(c, type = 'image/jpeg', q = 0.92) {
@@ -595,7 +751,7 @@ const isPlaceholderTitle = (t) => /^곡 \d+(-\d+)?$/.test(t || '') || /kakaotalk
 
 // 사진을 넣은 직후 제목을 적는 시트. 악보 윗부분을 보여주니 보고 그대로 옮겨 적으면 된다.
 // (자동 인식은 한글 정확도가 낮아 뺐다. 나중에 여기서 초안을 채워주는 식으로 붙일 수 있다.)
-function titleSheet(songs) {
+function titleSheet(songs, originals = []) {
   const list = (songs || []).filter((s) => s && s.sheets.length);
   if (!list.length) return;
   openSheet(`<h2>곡 제목을 적어주세요</h2>
@@ -612,9 +768,13 @@ function titleSheet(songs) {
     $('#ttOk', bg).onclick = async () => {
       for (const inp of inputs) {
         const song = list[+inp.dataset.i]; const v = inp.value.trim();
-        if (v && v !== song.title) { song.title = v; await saveSong(song); }
+        if (v && v !== song.title) {
+          song.title = v; await saveSong(song);
+          const original = originals[+inp.dataset.i];
+          if (original) { original.title = v; await saveSong(original); }
+        }
       }
-      closeSheet(); render();
+      await flushSaves(); closeSheet(); render();
     };
     $('#ttNo', bg).onclick = closeSheet;
   });
@@ -627,7 +787,7 @@ function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 120000);
 }
 
 // JPEG 이미지들을 A4 한 쪽씩 담은 PDF. 라이브러리 없이 직접 쓴다 — 인터넷 없어도 되고, 늘 같은 결과.
@@ -659,67 +819,179 @@ function buildPdf(images) {
   return new Blob(parts, { type: 'application/pdf' });
 }
 
-// 곡들을 합성해 PDF 하나로. 휴대폰이면 공유창(카톡), 컴퓨터면 다운로드 폴더.
-async function exportPdf(entries, name) {
-  const images = [];
-  for (const { song, form } of entries) {
-    for (let p = 0; p < song.sheets.length; p++) {
-      const c = await renderSongPage(song, p, form);
-      const blob = await canvasToBlob(c, 'image/jpeg', 0.9);
-      images.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height });
+// A preview freezes freshly rendered pixels. Download and share consume this
+// exact file, from a direct user gesture, without reusing earlier export blobs.
+function exportNote(target) {
+  const last = target.lastExport;
+  if (!last) return '아직 PDF를 내보내지 않았어요';
+  const changed = (target.updatedAt || 0) !== last.contentUpdatedAt;
+  return `${changed ? '● 마지막 출력 이후 수정됨' : '✓ 마지막 출력과 같은 내용'} · ${h(last.fileName)} · ${last.pageCount}쪽`;
+}
+let exportStamp = 0;
+function nextExportStamp() {
+  exportStamp = Math.max(Date.now(), exportStamp + 1);
+  const d = new Date(exportStamp), pad = n => String(n).padStart(2, '0');
+  return `${toISO(d).replaceAll('-', '')}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(d.getMilliseconds()).padStart(3, '0')}`;
+}
+async function exportPdf(entries, name, target, store) {
+  await flushSaves();
+  if (!entries.some(e => e.song?.sheets.length)) return toast('악보가 있는 곡이 없습니다', true);
+  const pages = [], urls = new Set();
+  let active = true, readyFile = null, fileUrl = null, generation = 0;
+  const retire = url => { if (url) setTimeout(() => URL.revokeObjectURL(url), 120000); };
+  openSheet(`<div class="row preview-head"><h2 class="grow">PDF 미리보기</h2><button class="btn sm" id="pvClose">닫기</button></div>
+    <p class="muted small">확인한 페이지 그대로 저장합니다. 제외해도 악보 원본은 남아 있어요.</p>
+    <label class="field">파일 이름<input type="text" id="pdfName" value="${h(target.exportBaseName || name)}" maxlength="120"></label>
+    <div id="pdfFileName" class="muted small file-name"></div>
+    <div class="preview-toolbar"><button class="btn sm" id="pvAll" disabled>모두 포함</button><button class="btn sm" id="pvNone" disabled>모두 제외</button><span id="pvCount" role="status">최신 편집 내용으로 준비 중…</span></div>
+    <div class="preview-pages" id="pvPages"></div>
+    <div class="preview-actions">
+      <a class="btn primary disabled" id="pdfDownload" aria-disabled="true">PDF 다운로드</a>
+      <button class="btn" id="pdfShare" disabled>공유</button>
+      <button class="btn" id="pdfPrint" disabled>인쇄</button>
+    </div>
+    <p class="muted small" id="pvStatus" role="status">저장 파일에 생성 시각을 붙여 이전 PDF와 구분합니다.</p>`, bg => {
+      $('#pvClose', bg).onclick = closeSheet;
+    }, () => { active = false; generation++; urls.forEach(retire); retire(fileUrl); });
+  const bg = $('#sheetBg');
+  function disableOutput() {
+    readyFile = null;
+    $('#pdfDownload', bg).removeAttribute('href');
+    $('#pdfDownload', bg).classList.add('disabled');
+    $('#pdfDownload', bg).setAttribute('aria-disabled', 'true');
+    $('#pdfShare', bg).disabled = true; $('#pdfPrint', bg).disabled = true;
+  }
+  async function prepareFile() {
+    const current = ++generation; disableOutput();
+    const selected = pages.filter(p => !p.sheet.excluded);
+    $('#pvCount', bg).textContent = `${selected.length} / ${pages.length}쪽 포함`;
+    try {
+      await flushSaves();
+      if (!active || current !== generation) return;
+      const rawName = $('#pdfName', bg).value.trim().replace(/\.pdf$/i, '');
+      const base = rawName ? safeName(rawName) : '';
+      if (!selected.length || !base) {
+        $('#pdfFileName', bg).textContent = !selected.length ? '한 페이지 이상 선택하세요.' : '파일 이름을 입력하세요.';
+        return;
+      }
+      const filename = `${base}_${nextExportStamp()}.pdf`;
+      const file = new File([buildPdf(selected)], filename, { type: 'application/pdf' });
+      retire(fileUrl); fileUrl = URL.createObjectURL(file); readyFile = file;
+      const link = $('#pdfDownload', bg);
+      link.href = fileUrl; link.download = filename;
+      link.classList.remove('disabled'); link.setAttribute('aria-disabled', 'false');
+      $('#pdfFileName', bg).textContent = `저장 파일: ${filename}`;
+      $('#pdfShare', bg).disabled = !(navigator.canShare?.({ files: [file] }));
+      $('#pdfShare', bg).title = $('#pdfShare', bg).disabled ? '이 브라우저에서는 다운로드 후 파일을 공유하세요.' : '';
+      $('#pdfPrint', bg).disabled = false;
+    } catch (error) {
+      if (active && current === generation) $('#pvStatus', bg).textContent = error.message;
     }
   }
-  if (!images.length) return toast('악보가 있는 곡이 없습니다', true);
-  const pdf = buildPdf(images);
-  const file = new File([pdf], `${safeName(name)}.pdf`, { type: 'application/pdf' });
-  if (isMobile() && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: name }); return; }
-    catch (e) { if (e.name === 'AbortError') return; }
+  function recordExport(fileName) {
+    target.exportBaseName = $('#pdfName', bg).value.trim().replace(/\.pdf$/i, '');
+    target.lastExport = { at: Date.now(), contentUpdatedAt: target.updatedAt || 0,
+      fileName, pageCount: pages.filter(p => !p.sheet.excluded).length };
+    // Export metadata does not mark the score as edited.
+    persistRecords([{ store, value: store === 'songs' ? songRecord(target) : toRecord(target) }]);
+    const note = $('.export-note'); if (note) note.innerHTML = exportNote(target);
   }
-  download(pdf, file.name);
-  toast(`'${file.name}' 을 다운로드 폴더에 저장했어요. 카톡에 파일로 올리면 됩니다`);
+  try {
+    for (const { song, form } of entries) {
+      for (let page = 0; page < song.sheets.length; page++) {
+        if (!active) return;
+        const canvas = await renderSongPage(song, page, form);
+        const blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+        if (!blob) throw new Error('PDF 이미지를 만들지 못했습니다. 다시 시도하세요.');
+        const url = URL.createObjectURL(blob); urls.add(url);
+        const item = { song, sheet: song.sheets[page], page, url,
+          bytes: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height };
+        if (!active) { retire(url); return; }
+        const index = pages.length; pages.push(item);
+        const card = document.createElement('div'); card.className = 'preview-page';
+        card.innerHTML = `<label class="preview-check"><input type="checkbox" data-page="${index}" ${item.sheet.excluded ? '' : 'checked'}><span>${h(song.title)} · ${page + 1}장${form ? '' : ' · 송폼 없음'}</span></label><img src="${url}" alt="${h(song.title)} ${page + 1}장 출력 미리보기">`;
+        card.classList.toggle('excluded', item.sheet.excluded);
+        $('img', card).onclick = () => card.classList.toggle('expanded');
+        $('#pvPages', bg).appendChild(card);
+        $('input', card).onchange = async e => {
+          item.sheet.excluded = !e.target.checked;
+          card.classList.toggle('excluded', item.sheet.excluded);
+          saveSong(song); await prepareFile();
+        };
+      }
+    }
+    if (!active) return;
+    const selectAll = include => {
+      pages.forEach(p => p.sheet.excluded = !include);
+      new Set(pages.map(p => p.song)).forEach(saveSong);
+      $$('.preview-page', bg).forEach(card => { $('input', card).checked = include; card.classList.toggle('excluded', !include); });
+      prepareFile();
+    };
+    $('#pvAll', bg).disabled = false; $('#pvAll', bg).onclick = () => selectAll(true);
+    $('#pvNone', bg).disabled = false; $('#pvNone', bg).onclick = () => selectAll(false);
+    $('#pdfName', bg).oninput = () => prepareFile();
+    $('#pdfDownload', bg).onclick = e => {
+      if (!readyFile || failedWrites.size || pendingSaves) { e.preventDefault(); return; }
+      recordExport(readyFile.name);
+      $('#pvStatus', bg).textContent = '다운로드를 요청했어요. 위 파일 이름으로 다운로드 목록을 확인하세요.';
+    };
+    $('#pdfShare', bg).onclick = async () => {
+      const file = readyFile; if (!file || pendingSaves || failedWrites.size) return;
+      try {
+        await navigator.share({ files: [file], title: file.name.replace(/\.pdf$/, '') });
+        if (active) { recordExport(file.name); $('#pvStatus', bg).textContent = '공유했습니다.'; }
+      } catch (error) {
+        if (error.name !== 'AbortError' && active) $('#pvStatus', bg).textContent = '공유하지 못했습니다. PDF 다운로드 후 파일을 공유하세요.';
+      }
+    };
+    $('#pdfPrint', bg).onclick = () => {
+      if (!readyFile || pendingSaves || failedWrites.size) return;
+      const box = $('#print'); box.replaceChildren();
+      for (const p of pages.filter(p => !p.sheet.excluded)) {
+        const img = document.createElement('img'); img.src = p.url; box.appendChild(img);
+      }
+      Promise.all($$('img', box).map(img => img.decode())).then(() => window.print()).catch(reportError);
+    };
+    await prepareFile();
+  } catch (error) {
+    if (active) { disableOutput(); $('#pvStatus', bg).textContent = error.message; }
+    reportError(error);
+  }
 }
-const pdfSong = (song, form) => exportPdf([{ song, form }], song.title);
+const pdfSong = (song, form) => exportPdf([{ song, form }], song.title, song, 'songs');
 function pdfWeek(week) {
-  const entries = week.songs.map((e) => { const s = songOf(e.songId); return s && s.sheets.length ? { song: s, form: e.form || s.lastForm } : null; }).filter(Boolean);
-  return exportPdf(entries, `${weekTitle(week)} 콘티`);
+  const missing = week.songs.some(e => !songOf(e.songId)?.sheets.length);
+  if (missing) throw new Error('악보가 없는 곡이 있습니다. 악보를 추가하거나 콘티에서 뺀 뒤 내보내세요.');
+  const entries = week.songs.map(e => ({ song: songOf(e.songId), form: entryForm(e) }));
+  return exportPdf(entries, weekTitle(week), week, 'weeks');
 }
+const printWeek = pdfWeek;
 
-async function printWeek(week) {
-  const box = $('#print');
-  box.innerHTML = '';
-  for (const e of week.songs) {
-    const s = songOf(e.songId);
-    if (!s) continue;
-    for (let p = 0; p < s.sheets.length; p++) {
-      const c = await renderSongPage(s, p, e.form || s.lastForm);
-      const img = document.createElement('img');
-      img.src = c.toDataURL('image/jpeg', 0.92);
-      box.appendChild(img);
-    }
-  }
-  if (!box.children.length) return toast('인쇄할 악보가 없습니다', true);
-  await sleep(150);
-  window.print();
-}
 
 // ────────────────────────────── 화면 ──────────────────────────────
 function go(view) { state.view = view; state.edit = null; render(); window.scrollTo(0, 0); }
 function render() {
   const app = $('#app');
-  const v = state.view;
+  let v = state.view;
+  if (v.name === 'song' && (!songOf(v.songId) || (v.weekId && !weekOf(v.weekId)?.songs.some(e => e.id === v.entryId)))) {
+    state.edit = null; state.view = v = weekOf(v.weekId) ? { name: 'week', id: v.weekId } : { name: 'home' };
+  }
+  if (v.name === 'week' && !weekOf(v.id)) state.view = v = { name: 'home' };
+  app.classList.toggle('editing', v.name === 'song');
   if (v.name === 'home') app.innerHTML = viewHome();
   else if (v.name === 'week') app.innerHTML = viewWeek(v.id);
   else if (v.name === 'song') app.innerHTML = viewSong(v);
   else if (v.name === 'library') app.innerHTML = viewLibrary();
-  if (v.name === 'song') afterSongRender();
+  if (v.name === 'song') afterSongRender().catch(reportError);
+  if (v.name === 'library') $('#librarySearch').oninput = e => { const pos = e.target.selectionStart; state.libraryQuery = e.target.value; render(); const input = $('#librarySearch'); input.focus(); input.setSelectionRange(pos, pos); };
   renderSheet();
 }
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
-  if (ACTIONS[act]) ACTIONS[act](el, e);
+  if (!state.loaded && act !== 'retrySave') return toast('저장 공간을 먼저 다시 열어주세요.', true);
+  if (ACTIONS[act]) Promise.resolve().then(() => ACTIONS[act](el, e)).catch(reportError);
 });
 
 // ── 홈: 이번 달 주차들 ──
@@ -734,7 +1006,7 @@ function viewHome() {
       return `<div class="th" ${s && s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>`;
     }).join('');
     return `<div class="card tap week-card" data-act="openWeek" data-id="${w.id}">
-      <div class="row"><div class="date grow">${weekTitle(w)} 콘티</div><div class="muted small">${fmtDate(w.date)}</div><button class="card-more" data-act="weekMenu" data-id="${w.id}" title="메뉴">⋯</button></div>
+      <div class="row"><div class="date grow">${h(weekTitle(w))}</div><div class="muted small">${fmtDate(w.date)}</div><button class="card-more" data-act="weekMenu" data-id="${w.id}" title="메뉴">⋯</button></div>
       ${w.songs.length
         ? `<div class="thumbs">${thumbs}</div><div class="time ${over ? 'over' : ''}">${w.songs.length}곡 · ${fmtDur(total)} · 목표 ${w.target || 20}분</div>`
         : '<div class="muted small" style="margin-top:6px">아직 악보가 없습니다</div>'}
@@ -766,7 +1038,7 @@ function viewWeek(id) {
   const rows = w.songs.map((e, i) => {
     const s = songOf(e.songId);
     const thumb = s && s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : '';
-    const form = e.form || (s && s.lastForm) || '';
+    const form = entryForm(e, s);
     const secs = s ? estimateSecs(form, s.tempo) : 0;
     return `<div class="card entry" data-id="${e.id}">
       <div class="thumb" ${thumb} data-act="openEntry" data-week="${w.id}" data-entry="${e.id}"></div>
@@ -785,22 +1057,23 @@ function viewWeek(id) {
   return `
     <div class="top">
       <button class="icon" data-act="home">‹</button>
-      <h1>${weekTitle(w)} <span class="muted" style="font-size:14px;font-weight:400">${fmtDate(w.date)}</span></h1>
+      <h1><button data-act="renameWeek" data-id="${w.id}" aria-label="콘티 제목 수정">${h(weekTitle(w))} ✎</button> <span class="muted" style="font-size:14px;font-weight:400">${fmtDate(w.date)}</span></h1>
       <button class="icon" data-act="weekMenu" data-id="${w.id}">⋯</button>
     </div>
     <div class="wrap">
+      <div class="export-note muted small">${exportNote(w)}</div>
       <div class="target-row">
         <span>${w.songs.length ? `<b class="${total > target * 1.05 ? 'over' : ''}">${fmtDur(total)}</b> 예상` : '악보를 추가하세요'}</span>
         <button data-act="setTarget" data-id="${w.id}">목표 ${w.target || 20}분 ›</button>
       </div>
-      ${rows || `<div class="empty">아직 악보가 없습니다.<br><b>악보 추가</b>에서 사진을 여러 장 고르면<br>한 장이 한 곡으로 들어옵니다.</div>`}
+      ${rows || `<div class="empty">아직 악보가 없습니다.<br><b>악보 추가</b>에서 사진을 여러 장 고르면<br>한 곡의 여러 장을 묶을 수 있습니다.</div>`}
       <div class="two" style="margin-top:4px">
         <button class="btn" data-act="addSong" data-id="${w.id}">＋ 악보 추가</button>
         <button class="btn soft" data-act="suggestWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>✨ 전체 추천</button>
       </div>
     </div>
     <div class="bottom"><div class="inner">
-      <button class="btn primary" data-act="pdfWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>PDF로 내보내기 (카톡 공유)</button>
+      <button class="btn primary" data-act="pdfWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>전체 미리보기 · PDF 공유</button>
     </div></div>`;
 }
 
@@ -811,14 +1084,158 @@ const LABEL_TEXTS = ['V', 'V1', 'V2', 'P.C', 'C', 'C1', 'C2', 'B', 'A', 'D', 'E'
 
 function currentForm() {
   const e = state.edit;
-  return e.entry ? e.entry.form : e.song.lastForm;
+  return e.entry ? entryForm(e.entry, e.song) : e.song.lastForm;
+}
+function rememberEdit() {
+  const ed = state.edit; if (!ed) return;
+  ed.undo = ed.undo || []; ed.redo = [];
+  ed.undo.push({ song: songRecord(ed.song), form: currentForm(), page: ed.page });
+  if (ed.undo.length > 30) ed.undo.shift();
+  const undo = $('[data-act=undoEdit]'), redo = $('[data-act=redoEdit]');
+  if (undo) undo.disabled = false; if (redo) redo.disabled = true;
+}
+function restoreEdit(from, to) {
+  const ed = state.edit, item = ed[from]?.pop(); if (!item) return;
+  (ed[to] ||= []).push({ song: songRecord(ed.song), form: currentForm(), page: ed.page });
+  const { id, lastExport, exportBaseName } = ed.song;
+  Object.keys(ed.song).forEach(k => delete ed.song[k]);
+  Object.assign(ed.song, item.song, { id, lastExport, exportBaseName });
+  if (ed.entry) ed.entry.form = item.form;
+  ed.page = Math.min(item.page, Math.max(0, ed.song.sheets.length - 1));
+  ed.selChip = null; saveSong(ed.song); render();
 }
 function setForm(text) {
+  rememberEdit();
   const e = state.edit;
   const song = e.song;
-  if (e.entry) { e.entry.form = text; saveWeek(e.week); }
+  if (e.entry) e.entry.form = text;
   song.lastForm = text;
   saveSong(song);
+}
+
+// A copied form is a string snapshot: applying it never links two arrangements.
+async function copyForm() {
+  const ed = state.edit, text = currentForm()?.trim();
+  if (!ed || !text) return toast('복사할 송폼이 없습니다');
+  const copied = { key: 'formClipboard', text, title: ed.song.title,
+    source: ed.week ? `${weekTitle(ed.week)} · ${ed.week.date}` : '곡 보관함', copiedAt: Date.now() };
+  state.formClipboard = copied;
+  let systemCopy = Promise.resolve(false);
+  try { if (navigator.clipboard?.writeText) systemCopy = navigator.clipboard.writeText(text).then(() => true, () => false); } catch (_) { /* App clipboard still works. */ }
+  const saved = await persistRecords([{ store: 'meta', value: copied }]);
+  const onClipboard = await systemCopy;
+  if (!saved) return toast('송폼을 복사했지만 기기에 보관하지 못했어요. 상단에서 저장을 다시 시도하세요.', true);
+  toast(onClipboard ? '송폼을 복사했어요. 다른 곡에서 붙여넣으세요.' : '앱 안에 복사했어요. 다른 곡에서 송폼 붙여넣기를 누르세요.');
+}
+function pasteForm(copied = state.formClipboard) {
+  const target = state.edit;
+  if (!target) return;
+  const original = currentForm() || '';
+  let active = true, applying = false;
+  openSheet(`<div class="row"><h2 class="grow">송폼 붙여넣기</h2><button class="btn sm" id="pasteCancel">취소</button></div>
+    <p class="muted small" id="pasteSource">${copied ? `${h(copied.title)} · ${h(copied.source)}` : '복사한 송폼을 아래에 붙여넣으세요.'}</p>
+    <label class="field">가져올 송폼<textarea id="pasteText" rows="3" placeholder="Intro-V1-C-V2-Cx2-outro">${h(copied?.text || '')}</textarea></label>
+    <button class="btn sm" id="readClipboard">기기 클립보드에서 읽기</button>
+    <div class="form-comparison"><div class="muted small">현재 송폼</div><div>${original ? formHtml(original) : '송폼 없음'}</div>
+    <div class="muted small">붙여넣을 송폼</div><div id="pastePreview"></div></div>
+    <p class="muted small">이 곡의 송폼만 바뀝니다. 악보·라벨·위치는 유지되며 실행 취소할 수 있어요.</p>
+    <div class="actions"><button class="btn" id="pasteAppend">뒤에 이어 붙이기</button><button class="btn primary" id="pasteReplace">${original ? '현재 송폼 바꾸기' : '송폼 넣기'}</button></div>
+    <p class="muted small" id="pasteStatus" role="status"></p>`, bg => {
+    const input = $('#pasteText', bg);
+    const normalized = () => serializeForm(parseForm(input.value.trim()));
+    const update = () => {
+      const text = normalized();
+      $('#pastePreview', bg).innerHTML = text ? formHtml(text) : '붙여넣을 송폼이 없습니다';
+      $('#pasteReplace', bg).disabled = !text || applying;
+      $('#pasteAppend', bg).disabled = !text || applying;
+    };
+    input.oninput = () => { $('#pasteSource', bg).textContent = '직접 입력하거나 붙여넣은 송폼'; update(); };
+    $('#pasteCancel', bg).onclick = closeSheet;
+    $('#readClipboard', bg).onclick = async () => {
+      try {
+        if (!navigator.clipboard?.readText) throw new Error('unsupported');
+        const text = await navigator.clipboard.readText();
+        if (!active) return;
+        input.value = text; $('#pasteSource', bg).textContent = '기기 클립보드의 송폼'; update();
+        $('#pasteStatus', bg).textContent = text.trim() ? '' : '클립보드가 비어 있습니다.';
+      } catch (_) {
+        if (!active) return;
+        $('#pasteStatus', bg).textContent = '송폼 입력칸을 길게 누르거나 Ctrl/Cmd+V로 붙여넣으세요.';
+        input.focus();
+      }
+    };
+    const apply = async append => {
+      const text = normalized();
+      if (!text || applying || state.edit !== target) return;
+      applying = true; update();
+      const next = append && original ? `${original}-${text}` : text;
+      if (next !== currentForm()) { setForm(next); target.selChip = null; }
+      try {
+        await flushSaves();
+        if (active) { closeSheet(); render(); toast(append ? '송폼을 이어 붙였어요' : '송폼을 가져왔어요'); }
+      } catch (error) {
+        applying = false;
+        if (active) { update(); $('#pasteStatus', bg).textContent = error.message; }
+      }
+    };
+    $('#pasteAppend', bg).onclick = () => apply(true);
+    $('#pasteReplace', bg).onclick = () => apply(false);
+    update();
+  }, () => { active = false; });
+}
+function reusableForms(targetSong) {
+  const sources = [];
+  for (const week of state.weeks) {
+    for (const entry of week.songs) {
+      const song = songOf(entry.songId), text = entryForm(entry, song).trim();
+      if (!song || !text || song === targetSong) continue;
+      sources.push({ song, text, title: song.title, source: `${weekTitle(week)} · ${week.date}`, date: week.date });
+    }
+  }
+  for (const song of librarySongs()) {
+    if (song !== targetSong && song.lastForm?.trim()) sources.push({ song, text: song.lastForm, title: song.title, source: '곡 보관함', date: '' });
+  }
+  const sameSong = song => targetSong && ((song.sourceSongId || song.id) === (targetSong.sourceSongId || targetSong.id)
+    || song.title.trim().toLocaleLowerCase() === targetSong.title.trim().toLocaleLowerCase());
+  return sources.map(s => ({ ...s, match: !!sameSong(s.song) }))
+    .sort((a, b) => Number(b.match) - Number(a.match) || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'ko'));
+}
+function browseForms(week = null) {
+  const target = week ? null : state.edit;
+  if (!week && !target) return;
+  const sources = reusableForms(target?.song).filter(s => !week || s.song.ownerWeekId !== week.id);
+  openSheet(`<div class="row"><h2 class="grow">${week ? '이전 곡 가져오기' : '이전 송폼 가져오기'}</h2><button class="btn sm" id="historyClose">닫기</button></div>
+    <p class="muted small">${week ? '이전 콘티나 보관함의 곡을 악보·송폼과 함께 독립적으로 복사합니다.' : '같은 곡을 먼저 보여줍니다. 주차별 송폼을 확인하고 가져오세요.'}</p>
+    <input type="search" id="formHistorySearch" aria-label="이전 송폼 검색" placeholder="곡 제목 · 콘티 이름 · 날짜 검색">
+    <div id="formHistoryList" class="form-history"></div>`, bg => {
+    $('#historyClose', bg).onclick = closeSheet;
+    const draw = () => {
+      const query = $('#formHistorySearch', bg).value.trim().toLocaleLowerCase();
+      const found = sources.map((s, i) => ({ s, i })).filter(({s}) => `${s.title} ${s.song.key || ''} ${s.source}`.toLocaleLowerCase().includes(query));
+      $('#formHistoryList', bg).innerHTML = found.map(({s, i}) => `<button class="form-history-item" data-source="${i}">
+        <div><b>${h(s.title)}</b>${s.match ? ' <span class="same-song">같은 곡</span>' : ''} ${h(s.song.key || '')}</div>
+        <div class="muted small">${h(s.source)}</div><div class="history-form">${formHtml(s.text)}</div>
+      </button>`).join('') || '<div class="empty">가져올 송폼이 없습니다.</div>';
+      $$('[data-source]', bg).forEach(button => button.onclick = () => {
+        const source = sources[+button.dataset.source];
+        if (!week) { if (state.edit === target) pasteForm(source); return; }
+        openSheet(`<h2>${h(source.title)} 가져오기</h2><p class="muted small">${h(source.source)}</p>
+          <div class="form-comparison">${formHtml(source.text)}</div>
+          <p>${h(weekTitle(week))}에 악보 ${source.song.sheets.length}장과 송폼을 복사합니다. 이후 편집은 원래 콘티에 영향을 주지 않습니다.</p>
+          <div class="actions"><button class="btn" id="historyBack">목록으로</button><button class="btn primary" id="historyAdd">이 곡 추가</button></div>`, confirmBg => {
+          $('#historyBack', confirmBg).onclick = () => browseForms(week);
+          $('#historyAdd', confirmBg).onclick = async () => {
+            $('#historyAdd', confirmBg).disabled = true;
+            try {
+              await attachSongs(week, [{ ...source.song, lastForm: source.text }]);
+              closeSheet(); go({ name: 'week', id: week.id }); toast('이전 곡의 악보와 송폼을 가져왔어요');
+            } catch (error) { reportError(error); }
+          };
+        });
+      });
+    };
+    $('#formHistorySearch', bg).oninput = draw; draw();
+  });
 }
 
 function viewSong(v) {
@@ -871,6 +1288,16 @@ function viewSong(v) {
       `}
 
       <div class="section">
+        <div class="edit-shortcuts">
+          <button class="btn sm" data-act="undoEdit" ${ed.undo?.length ? '' : 'disabled'}>↶ 실행 취소</button>
+          <button class="btn sm" data-act="redoEdit" ${ed.redo?.length ? '' : 'disabled'}>↷ 다시 실행</button>
+          <button class="btn sm" data-act="typeForm">직접 입력</button>
+        </div>
+        <div class="form-reuse">
+          <button class="btn sm" data-act="copyForm" ${blocks.length ? '' : 'disabled'}>송폼 복사</button>
+          <button class="btn sm" data-act="pasteForm">송폼 붙여넣기</button>
+          <button class="btn sm" data-act="browseForms">이전 송폼 가져오기</button>
+        </div>
         <h3>송폼 <span class="right">${fmtDur(estimateSecs(form, song.tempo))}</span></h3>
         <div class="chips">${chips || '<div class="chip-empty">아래 버튼을 눌러 순서대로 넣으세요. 예) Intro → V1 → C → V2 → C → outro</div>'}</div>
         ${sel ? `<div class="chip-tools">
@@ -906,9 +1333,10 @@ function viewSong(v) {
         </div>
       </div>
     </div>
-    <div class="bottom"><div class="inner">
+    <div class="bottom song-bottom"><div class="inner">
       ${nav}
-      <button class="btn primary" data-act="pdfSong" ${song.sheets.length ? '' : 'disabled'}>PDF</button>
+      <button class="btn primary" data-act="pdfSong" ${song.sheets.length ? '' : 'disabled'}>이 곡 PDF</button>
+      ${week ? `<button class="btn" data-act="pdfWeek" data-id="${week.id}">전체 PDF</button>` : ''}
     </div></div>`;
 }
 
@@ -917,15 +1345,22 @@ async function afterSongRender() {
   const ed = state.edit;
   const song = ed.song;
   const cv = $('#cv');
-  $('#fTitle')?.addEventListener('change', (e) => { song.title = e.target.value.trim() || '제목 없음'; saveSong(song); $('.top h1').textContent = song.title; });
-  $('#fKey')?.addEventListener('change', (e) => { song.key = e.target.value.trim(); saveSong(song); });
-  $('#formSize')?.addEventListener('input', (e) => { song.placement = { ...(song.placement || { x: .5, y: .05, page: 0 }), size: +e.target.value / 1000 }; redraw(); });
+  $('#fTitle')?.addEventListener('focus', rememberEdit);
+  $('#fKey')?.addEventListener('focus', rememberEdit);
+  $('#fTitle')?.addEventListener('input', (e) => { song.title = e.target.value.trim() || '제목 없음'; saveSong(song); $('.top h1').textContent = song.title; });
+  $('#fKey')?.addEventListener('input', (e) => { song.key = e.target.value.trim(); saveSong(song); });
+  $('#formSize')?.addEventListener('pointerdown', rememberEdit);
+  $('#labelSize')?.addEventListener('pointerdown', rememberEdit);
+  $('#formSize')?.addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) rememberEdit(); });
+  $('#labelSize')?.addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) rememberEdit(); });
+  $('#formSize')?.addEventListener('input', (e) => { song.placement = { ...(song.placement || { x: .5, y: .05, page: 0 }), size: +e.target.value / 1000 }; saveSong(song); redraw(); });
   $('#formSize')?.addEventListener('change', () => saveSong(song));
-  $('#labelSize')?.addEventListener('input', (e) => { const s = +e.target.value / 1000; song.labelSize = s; (song.labels || []).forEach((l) => { if ((l.page || 0) === ed.page) l.size = s; }); redraw(); });
+  $('#labelSize')?.addEventListener('input', (e) => { const s = +e.target.value / 1000; song.labelSize = s; (song.labels || []).forEach((l) => { if ((l.page || 0) === ed.page) l.size = s; }); saveSong(song); redraw(); });
   $('#labelSize')?.addEventListener('change', () => saveSong(song));
   if (!cv || !song.sheets[ed.page]) return;
 
   if (!song.placement) { song.placement = { ...detectSlot(await bitmapOf(song.sheets[0])), page: 0 }; saveSong(song); }
+  if (state.edit !== ed || cv !== $('#cv')) return;
   await redraw();
 
   // 드래그: 송폼 글자 또는 라벨을 잡아 옮긴다. 라벨 모드에서 빈 곳을 누르면 라벨 추가.
@@ -940,7 +1375,7 @@ async function afterSongRender() {
     else if (hit(p, boxes.form) && ed.mode !== 'label') drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false };
     else if (ed.mode === 'label') drag = { type: 'new', start: p, moved: false };
     else if (boxes.form) drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false, loose: true };
-    if (drag) { try { cv.setPointerCapture(e.pointerId); } catch (_) { /* 합성 이벤트 등 포인터가 없을 때 */ } ed.selected = drag.type === 'form' ? 'form' : null; }
+    if (drag) { rememberEdit(); try { cv.setPointerCapture(e.pointerId); } catch (_) { /* 합성 이벤트 등 포인터가 없을 때 */ } ed.selected = drag.type === 'form' ? 'form' : null; }
   });
   cv.addEventListener('pointermove', (e) => {
     if (!drag) return;
@@ -975,13 +1410,15 @@ async function redraw() {
   const cv = $('#cv'); if (!cv) return;
   const sheet = ed.song.sheets[ed.page]; if (!sheet) return;
   const img = await bitmapOf(sheet);
+  if (state.edit !== ed || cv !== $('#cv') || ed.song.sheets[ed.page] !== sheet) return;
   ed.boxes = drawPage(cv, img, { form: currentForm(), placement: ed.song.placement, labels: ed.song.labels, page: ed.page, selected: ed.selected });
 }
 
 // ── 보관함 ──
 function viewLibrary() {
-  const songs = Object.values(state.songs).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const items = songs.map((s) => `<div class="lib-item" data-act="openSong" data-id="${s.id}">
+  const songs = librarySongs().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const query = (state.libraryQuery || '').trim().toLocaleLowerCase();
+  const items = songs.filter(s => `${s.title} ${s.key || ''}`.toLocaleLowerCase().includes(query)).map((s) => `<div class="lib-item" data-act="openSong" data-id="${s.id}">
       <div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div>
       <div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div>
       <button class="card-more" data-act="deleteSong" data-id="${s.id}" title="삭제">🗑</button></div>`).join('');
@@ -992,19 +1429,22 @@ function viewLibrary() {
       <button class="icon ghost">·</button>
     </div>
     <div class="wrap">
-      <div class="card" style="padding:4px 10px">${items || '<div class="empty">아직 곡이 없습니다.<br>주차에서 곡을 추가하면 여기에 쌓입니다.</div>'}</div>
+      <input type="search" id="librarySearch" aria-label="곡 보관함 검색" placeholder="곡 제목 · 키 검색" value="${h(state.libraryQuery || '')}" style="margin-bottom:12px">
+      <div class="card" style="padding:4px 10px">${items || `<div class="empty">${query ? '검색 결과가 없습니다.' : '아직 곡이 없습니다.<br>주차에서 곡을 추가하면 여기에 쌓입니다.'}</div>`}</div>
     </div>
     <div class="bottom"><div class="inner"><button class="btn primary" data-act="newSongInLibrary">＋ 새 곡 (악보 사진)</button></div></div>`;
 }
 
 // ── 시트(모달) ──
-function openSheet(html, onMount) { state.sheet = { html, onMount }; renderSheet(); }
-function closeSheet() { state.sheet = null; renderSheet(); }
+function openSheet(html, onMount, onClose) { closeSheet(); state.sheet = { html, onMount, onClose }; document.body.classList.add('modal-open'); renderSheet(); }
+function closeSheet() { const old = state.sheet; state.sheet = null; document.body.classList.remove('modal-open'); old?.onClose?.(); renderSheet(); }
 function renderSheet() {
   let bg = $('#sheetBg');
   if (!state.sheet) { bg?.remove(); return; }
   if (!bg) { bg = document.createElement('div'); bg.id = 'sheetBg'; bg.className = 'sheet-bg'; bg.addEventListener('click', (e) => { if (e.target === bg) closeSheet(); }); document.body.appendChild(bg); }
-  bg.innerHTML = `<div class="sheet">${state.sheet.html}</div>`;
+  if (bg._sheet === state.sheet) return;
+  bg._sheet = state.sheet;
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${state.sheet.html}</div>`;
   state.sheet.onMount?.(bg);
 }
 function askText(title, value = '', placeholder = '') {
@@ -1012,24 +1452,24 @@ function askText(title, value = '', placeholder = '') {
     openSheet(`<h2>${h(title)}</h2><input type="text" id="askIn" value="${h(value)}" placeholder="${h(placeholder)}">
       <div class="actions"><button class="btn" id="askNo">취소</button><button class="btn primary" id="askOk">확인</button></div>`, (bg) => {
       const inp = $('#askIn', bg); inp.focus(); inp.select();
-      const ok = () => { const v = inp.value; closeSheet(); res(v); };
+      const ok = () => { const v = inp.value; res(v); closeSheet(); };
       $('#askOk', bg).onclick = ok;
       inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
-      $('#askNo', bg).onclick = () => { closeSheet(); res(null); };
-    });
+      $('#askNo', bg).onclick = closeSheet;
+    }, () => res(null));
   });
 }
 function confirmSheet(title, okLabel = '삭제') {
   return new Promise((res) => {
     openSheet(`<h2>${h(title)}</h2><div class="actions"><button class="btn" id="cNo">취소</button><button class="btn primary" id="cOk" style="background:var(--danger);border-color:var(--danger)">${h(okLabel)}</button></div>`, (bg) => {
-      $('#cOk', bg).onclick = () => { closeSheet(); res(true); };
-      $('#cNo', bg).onclick = () => { closeSheet(); res(false); };
-    });
+      $('#cOk', bg).onclick = () => { res(true); closeSheet(); };
+      $('#cNo', bg).onclick = closeSheet;
+    }, () => res(false));
   });
 }
 function menuSheet(title, items) {
   openSheet(`<h2>${h(title)}</h2><div class="list">${items.map((it, i) => `<button class="${it.danger ? 'danger' : ''}" data-i="${i}"><span class="ic">${it.icon || '•'}</span>${h(it.label)}</button>`).join('')}</div>`, (bg) => {
-    $$('.list button', bg).forEach((b) => b.onclick = () => { closeSheet(); items[+b.dataset.i].run(); });
+    $$('.list button', bg).forEach((b) => b.onclick = () => { closeSheet(); Promise.resolve().then(() => items[+b.dataset.i].run()).catch(reportError); });
   });
 }
 function pickFiles() {
@@ -1037,6 +1477,7 @@ function pickFiles() {
     const inp = $('#filePick');
     inp.value = '';
     inp.onchange = () => res(Array.from(inp.files || []));
+    inp.oncancel = () => res([]);
     inp.click();
   });
 }
@@ -1046,27 +1487,61 @@ function defaultTitle(file, n) {
   const base = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
   return base && !looksLikeCameraName(base) ? base : `곡 ${n}`;
 }
-// 사진 여러 장 → 곡 여러 개. 한 곡이 두 장이면 곡 안에서 '장 추가'로 붙인다.
+// Review page boundaries before importing. A continuation is never treated as
+// an incomplete song merely because it has no form of its own.
+function planImport(files, startNo) {
+  if (files.length === 1) return Promise.resolve([{ files, title: defaultTitle(files[0], startNo) }]);
+  return new Promise(resolve => {
+    const urls = files.map(f => URL.createObjectURL(f));
+    openSheet(`<h2>악보 묶기</h2><p class="muted small">같은 곡의 뒷장은 ‘앞 장과 같은 곡’을 선택하세요. 순서는 가져온 뒤에도 바꿀 수 있어요.</p>
+      <div class="import-pages">${files.map((file, i) => `<div class="import-page">
+        <img src="${urls[i]}" alt="가져올 악보 ${i + 1}장">
+        <div><div class="muted small">${i + 1}장 · ${h(file.name)}</div>
+        ${i ? `<label><input type="checkbox" data-join="${i}"> 앞 장과 같은 곡</label>` : '<div class="muted small">첫 곡</div>'}
+        <input type="text" data-title="${i}" aria-label="${i + 1}장 곡 제목" value="${h(defaultTitle(file, startNo + i))}"></div>
+      </div>`).join('')}</div>
+      <div class="actions"><button class="btn" id="importCancel">취소</button><button class="btn primary" id="importConfirm">악보 추가</button></div>`, bg => {
+      $$('[data-join]', bg).forEach(input => input.onchange = () => {
+        $(`[data-title="${input.dataset.join}"]`, bg).disabled = input.checked;
+      });
+      $('#importCancel', bg).onclick = closeSheet;
+      $('#importConfirm', bg).onclick = () => {
+        const groups = [];
+        files.forEach((file, i) => {
+          if (i && $(`[data-join="${i}"]`, bg).checked) groups[groups.length - 1].files.push(file);
+          else groups.push({ files: [file], title: $(`[data-title="${i}"]`, bg).value.trim() || defaultTitle(file, startNo + groups.length) });
+        });
+        resolve(groups); closeSheet();
+      };
+    }, () => { urls.forEach(url => URL.revokeObjectURL(url)); resolve([]); });
+  });
+}
 async function createSongsFromFiles(files, startNo = 1) {
   if (!files.length) return [];
-  toast(files.length > 1 ? `악보 ${files.length}장을 정리하고 있어요…` : '악보를 정리하고 있어요…');
-  const songs = [];
-  let padded = false;
-  for (let i = 0; i < files.length; i++) {
-    const sheet = await prepareSheet(files[i]);
-    padded = padded || sheet.padded;
-    const song = { id: uid(), title: defaultTitle(files[i], startNo + i), key: '', tempo: 'mid', verses: 2, bridge: true, lastForm: '', labels: [], sheets: [sheet], createdAt: Date.now() };
-    song.placement = { ...detectSlot(await bitmapOf(sheet)), page: 0 };
-    state.songs[song.id] = song;
-    await saveSong(song);
+  const groups = await planImport(files, startNo);
+  if (!groups.length) return [];
+  toast(`악보 ${files.length}장을 정리하고 있어요…`);
+  const songs = []; let padded = false;
+  for (const group of groups) {
+    const sheets = [];
+    for (const file of group.files) { const sheet = await prepareSheet(file); sheets.push(sheet); padded ||= sheet.padded; }
+    const song = { id: uid(), title: group.title, key: '', tempo: 'mid', verses: 2, bridge: true,
+      lastForm: '', labels: [], sheets, createdAt: Date.now() };
+    song.placement = { ...detectSlot(await bitmapOf(sheets[0])), page: 0 };
     songs.push(song);
   }
+  // Prepare every image first, so a bad file cannot leave a partial import.
+  songs.forEach(song => state.songs[song.id] = song);
+  await persistRecords(songs.map(song => ({ store: 'songs', value: songRecord(song) })));
+  await flushSaves();
   if (padded) toast('송폼 적을 자리가 좁아 위쪽에 여백을 조금 넣었어요');
   return songs;
 }
+
 function movePage(dir) {
   const ed = state.edit, song = ed.song, i = ed.page, j = i + dir;
   if (j < 0 || j >= song.sheets.length) return;
+  rememberEdit();
   [song.sheets[i], song.sheets[j]] = [song.sheets[j], song.sheets[i]];
   (song.labels || []).forEach((l) => { const p = l.page || 0; if (p === i) l.page = j; else if (p === j) l.page = i; });
   if (song.placement) { if (song.placement.page === i) song.placement.page = j; else if (song.placement.page === j) song.placement.page = i; }
@@ -1081,7 +1556,7 @@ async function splitPages() {
   const newEntries = [];
   for (let p = song.sheets.length - 1; p >= 1; p--) {
     const sheet = song.sheets[p];
-    const ns = { id: uid(), title: `${looksLikeCameraName(song.title) && week ? `곡 ${at + 1}` : song.title}-${p + 1}`, key: '', tempo: 'mid', verses: 2, bridge: true, lastForm: '',
+    const ns = { id: uid(), ownerWeekId: song.ownerWeekId, sourceSongId: song.sourceSongId, title: `${looksLikeCameraName(song.title) && week ? `곡 ${at + 1}` : song.title}-${p + 1}`, key: '', tempo: 'mid', verses: 2, bridge: true, lastForm: '',
       labels: (song.labels || []).filter((l) => (l.page || 0) === p).map((l) => ({ ...l, page: 0 })), sheets: [sheet], createdAt: Date.now() };
     ns.placement = { ...detectSlot(await bitmapOf(sheet)), page: 0 };
     state.songs[ns.id] = ns; await saveSong(ns);
@@ -1093,23 +1568,52 @@ async function splitPages() {
   if (week && looksLikeCameraName(song.title)) song.title = `곡 ${at + 1}-1`;
   await saveSong(song);
   if (week) { week.songs.splice(at + 1, 0, ...newEntries); await saveWeek(week); }
-  ed.page = 0; render(); toast(`${newEntries.length + 1}곡으로 나눴어요`);
+  ed.page = 0; ed.undo = []; ed.redo = []; await flushSaves(); render(); toast(`${newEntries.length + 1}곡으로 나눴어요`);
   titleSheet([song, ...newEntries.map((e) => songOf(e.songId))]);
 }
 
-// 곡을 보관함에서 지우고, 그 곡이 들어간 모든 주차 콘티에서도 뺀다
+// Weekly arrangements and library originals have independent lifetimes.
 async function deleteSongEverywhere(song) {
+  const records = [{ store: 'songs', value: { id: song.id }, remove: true }];
   delete state.songs[song.id];
-  await idbDel('songs', song.id);
   for (const w of state.weeks) {
     const n = w.songs.length;
-    w.songs = w.songs.filter((e) => e.songId !== song.id);
-    if (w.songs.length !== n) await saveWeek(w);
+    w.songs = w.songs.filter(e => e.songId !== song.id);
+    if (w.songs.length !== n) { touch(w); records.push({ store: 'weeks', value: toRecord(w) }); }
   }
+  await persistRecords(records); await flushSaves();
+}
+async function removeWeek(week) {
+  const owned = Object.values(state.songs).filter(s => s.ownerWeekId === week.id);
+  state.weeks = state.weeks.filter(w => w.id !== week.id);
+  owned.forEach(s => delete state.songs[s.id]);
+  await persistRecords([{ store: 'weeks', value: { id: week.id }, remove: true },
+    ...owned.map(s => ({ store: 'songs', value: { id: s.id }, remove: true }))]);
+  await flushSaves();
+}
+async function saveArrangementToLibrary(song) {
+  const copy = songRecord(song);
+  copy.id = uid(); delete copy.ownerWeekId; delete copy.sourceSongId; delete copy.lastExport;
+  copy.title = (await askText('보관함에 새 곡으로 저장', song.title))?.trim();
+  if (!copy.title) return;
+  copy.sheets.forEach(sheet => sheet.excluded = false);
+  state.songs[copy.id] = copy; await saveSong(copy); await flushSaves();
+  toast('편집본을 보관함에 새 곡으로 저장했어요');
 }
 
 // ────────────────────────────── 동작 ──────────────────────────────
 const ACTIONS = {
+  copyForm,
+  pasteForm: () => pasteForm(),
+  browseForms: () => browseForms(),
+  retrySave: retrySaves,
+  undoEdit: () => restoreEdit('undo', 'redo'),
+  redoEdit: () => restoreEdit('redo', 'undo'),
+  renameWeek: async el => {
+    const week = weekOf(el.dataset.id);
+    const name = await askText('콘티 제목', weekTitle(week), '예: 10월 1주차 청년예배');
+    if (name?.trim()) { week.title = name.trim(); week.exportBaseName = week.title; await saveWeek(week); render(); }
+  },
   home: () => go({ name: 'home' }),
   prevMonth: () => { const [y, m] = state.month.split('-').map(Number); const d = new Date(y, m - 2, 1); state.month = monthOf(toISO(d)); render(); },
   nextMonth: () => { const [y, m] = state.month.split('-').map(Number); const d = new Date(y, m, 1); state.month = monthOf(toISO(d)); render(); },
@@ -1142,7 +1646,8 @@ const ACTIONS = {
   },
   weekMenu: (el) => {
     const w = weekOf(el.dataset.id);
-    menuSheet(fmtDate(w.date), [
+    menuSheet(weekTitle(w), [
+      { icon: '📝', label: '콘티 제목 바꾸기', run: () => ACTIONS.renameWeek({ dataset: { id: w.id } }) },
       { icon: '🖨', label: '인쇄', run: () => printWeek(w) },
       { icon: '📅', label: '날짜 바꾸기', run: () => openSheet(`<h2>날짜</h2><input type="date" id="wDate" value="${w.date}"><div class="actions"><button class="btn" id="wNo">취소</button><button class="btn primary" id="wOk">저장</button></div>`, (bg) => {
         $('#wOk', bg).onclick = () => { const v = $('#wDate', bg).value; if (v) { w.date = v; saveWeek(w); state.month = monthOf(v); } closeSheet(); render(); };
@@ -1150,35 +1655,39 @@ const ACTIONS = {
       }) },
       { icon: '🔤', label: '제목 한 번에 적기', run: () => titleSheet(w.songs.map((e) => songOf(e.songId))) },
       { icon: '📋', label: '이 콘티 복사해서 새 주차 만들기', run: async () => {
-        const nw = { id: uid(), date: toISO(nextSunday(new Date(new Date(w.date).getTime() + 86400000))), target: w.target, songs: w.songs.map((e) => ({ ...e, id: uid() })), createdAt: Date.now() };
-        state.weeks.push(nw); await saveWeek(nw); state.month = monthOf(nw.date); go({ name: 'week', id: nw.id }); toast('복사했습니다. 날짜를 확인하세요');
+        const nw = { id: uid(), date: toISO(nextSunday(new Date(new Date(w.date).getTime() + 86400000))), target: w.target, songs: [], createdAt: Date.now() };
+        state.weeks.push(nw);
+        const sources = w.songs.map(e => { const s = songOf(e.songId); return s ? { ...s, lastForm: entryForm(e, s) } : null; }).filter(Boolean);
+        await attachSongs(nw, sources); state.month = monthOf(nw.date); go({ name: 'week', id: nw.id }); toast('복사했습니다. 날짜를 확인하세요');
       } },
       { icon: '🗑', label: '이 주차 삭제', danger: true, run: async () => {
         if (!(await confirmSheet('이 주차 콘티를 삭제할까요?'))) return;
-        state.weeks = state.weeks.filter((x) => x.id !== w.id); await idbDel('weeks', w.id); go({ name: 'home' });
+        await removeWeek(w); go({ name: 'home' });
       } },
     ]);
   },
   addSong: (el) => {
     const w = weekOf(el.dataset.id);
-    const inLib = Object.values(state.songs).filter((s) => !w.songs.some((e) => e.songId === s.id));
+    const inLib = librarySongs();
     menuSheet('악보 추가', [
-      { icon: '📷', label: '악보 사진 넣기 (한 장 = 한 곡)', run: async () => {
+      { icon: '↗', label: '이전 콘티에서 곡 가져오기', run: () => browseForms(w) },
+      { icon: '📷', label: '악보 사진 넣기 · 여러 장 묶기', run: async () => {
         const files = await pickFiles(); if (!files.length) return;
         const songs = await createSongsFromFiles(files, w.songs.length + 1);
-        const entries = songs.map((s) => ({ id: uid(), songId: s.id, form: '' }));
-        w.songs.push(...entries); await saveWeek(w);
-        if (songs.length === 1) go({ name: 'song', songId: songs[0].id, weekId: w.id, entryId: entries[0].id });
+        if (!songs.length) return;
+        const entries = await attachSongs(w, songs);
+        const arrangements = entries.map(e => songOf(e.songId));
+        if (songs.length === 1) go({ name: 'song', songId: entries[0].songId, weekId: w.id, entryId: entries[0].id });
         else render();
-        titleSheet(songs);
+        titleSheet(arrangements, songs);
       } },
       { icon: '♪', label: `보관함에서 고르기 (${inLib.length}곡)`, run: () => {
         if (!inLib.length) return toast('보관함에 아직 곡이 없습니다');
-        openSheet(`<h2>보관함에서 고르기</h2><div class="list">${inLib.sort((a, b) => a.title.localeCompare(b.title, 'ko')).map((s) => `<button class="lib-item" data-id="${s.id}"><div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div><div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div></button>`).join('')}</div>`, (bg) => {
+        openSheet(`<h2>보관함에서 고르기</h2><input type="search" id="pickLibrarySearch" placeholder="곡 제목 · 키 검색" aria-label="추가할 곡 검색"><div class="list">${inLib.sort((a, b) => a.title.localeCompare(b.title, 'ko')).map((s) => `<button class="lib-item" data-id="${s.id}"><div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div><div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div></button>`).join('')}</div>`, (bg) => {
+          $('#pickLibrarySearch', bg).oninput = e => { const q = e.target.value.trim().toLocaleLowerCase(); $$('.lib-item', bg).forEach(b => { const song = songOf(b.dataset.id); b.hidden = !`${song.title} ${song.key}`.toLocaleLowerCase().includes(q); }); };
           $$('.lib-item', bg).forEach((b) => b.onclick = async () => {
             const s = songOf(b.dataset.id);
-            w.songs.push({ id: uid(), songId: s.id, form: s.lastForm || '' });
-            await saveWeek(w); closeSheet(); render(); toast(`'${s.title}' 추가`);
+            await attachSongs(w, [s]); closeSheet(); render(); toast(`'${s.title}' 추가`);
           });
         });
       } },
@@ -1204,14 +1713,13 @@ const ACTIONS = {
     const w = weekOf(el.dataset.week);
     const entry = w.songs.find((x) => x.id === el.dataset.entry);
     const song = songOf(entry.songId);
-    const remove = async () => { w.songs = w.songs.filter((x) => x.id !== entry.id); await saveWeek(w); render(); };
-    if (!song) return remove();
+    if (!song) { w.songs = w.songs.filter(e => e.id !== entry.id); saveWeek(w); render(); return; }
     menuSheet(song.title, [
-      { icon: '➖', label: '이 주 콘티에서만 빼기', run: () => { remove(); toast('콘티에서 뺐어요. 곡은 보관함에 남아 있어요'); } },
-      { icon: '🗑', label: '곡 자체를 삭제 (보관함에서도)', danger: true, run: async () => {
-        if (!(await confirmSheet(`'${song.title}'을(를) 완전히 삭제할까요? 다른 주 콘티에서도 사라집니다.`))) return;
-        await deleteSongEverywhere(song); render(); toast('삭제했어요');
+      { icon: '➖', label: '이 콘티에서 빼기', run: async () => {
+        if (!(await confirmSheet('이 콘티에서 곡을 뺄까요? 보관함과 다른 콘티는 유지됩니다.', '빼기'))) return;
+        await deleteSongEverywhere(song); render(); toast('이 콘티에서 뺐어요');
       } },
+      { icon: '♪', label: '편집본을 보관함에 새 곡으로 저장', run: () => saveArrangementToLibrary(song) },
     ]);
   },
   pdfWeek: (el) => pdfWeek(weekOf(el.dataset.id)),
@@ -1222,11 +1730,10 @@ const ACTIONS = {
   openSong: (el) => go({ name: 'song', songId: el.dataset.id }),
   deleteSong: async (el) => {
     const song = songOf(el.dataset.id); if (!song) return;
-    const used = state.weeks.filter((w) => w.songs.some((e) => e.songId === song.id)).length;
-    if (!(await confirmSheet(`'${song.title}'을(를) 삭제할까요?${used ? ` 콘티 ${used}개에서도 빠집니다.` : ''}`))) return;
+    if (!(await confirmSheet(`보관함에서 '${song.title}'을(를) 삭제할까요? 기존 콘티의 편집본은 유지됩니다.`))) return;
     await deleteSongEverywhere(song); render(); toast('삭제했어요');
   },
-  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, Object.keys(state.songs).length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); },
+  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, librarySongs().length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); },
   navSong: (el) => {
     const v = state.view; const w = weekOf(v.weekId);
     const e = w.songs[w.songs.findIndex((x) => x.id === v.entryId) + +el.dataset.dir];
@@ -1237,6 +1744,7 @@ const ACTIONS = {
   addPage: async () => {
     const files = await pickFiles(); if (!files.length) return;
     const song = state.edit.song;
+    rememberEdit();
     for (const f of files) song.sheets.push(await prepareSheet(f));
     if (!song.placement) song.placement = { ...detectSlot(await bitmapOf(song.sheets[0])), page: 0 };
     await saveSong(song); state.edit.page = song.sheets.length - 1; render();
@@ -1244,15 +1752,21 @@ const ACTIONS = {
   removePage: async () => {
     const ed = state.edit; const song = ed.song;
     if (!(await confirmSheet(`${ed.page + 1}장을 삭제할까요?`))) return;
+    rememberEdit();
+    const removedPage = ed.page;
     song.sheets.splice(ed.page, 1);
     song.labels = (song.labels || []).filter((l) => (l.page || 0) !== ed.page).map((l) => ({ ...l, page: l.page > ed.page ? l.page - 1 : l.page }));
-    if (song.placement && song.placement.page >= song.sheets.length) song.placement.page = 0;
+    if (song.placement) {
+      if (song.placement.page === removedPage) song.placement.page = Math.min(removedPage, Math.max(0, song.sheets.length - 1));
+      else if (song.placement.page > removedPage) song.placement.page--;
+    }
     ed.page = Math.max(0, ed.page - 1); await saveSong(song); render();
   },
   toggleLabel: () => { state.edit.mode = state.edit.mode === 'label' ? 'move' : 'label'; state.edit.selected = null; render(); },
   labelText: (el) => { state.edit.labelText = el.dataset.t; render(); },
   autoSlot: async () => {
     const ed = state.edit; const song = ed.song;
+    rememberEdit();
     song.placement = { ...detectSlot(await bitmapOf(song.sheets[ed.page])), page: ed.page };
     saveSong(song); render(); toast('여백을 찾아 옮겼어요. 손가락으로 더 옮길 수 있어요');
   },
@@ -1284,7 +1798,7 @@ const ACTIONS = {
     const v = await askText('송폼 직접 입력', currentForm(), 'Intro-V1-C-V2-Cx2-outro'); if (v === null) return;
     setForm(serializeForm(parseForm(v))); state.edit.more = false; render();
   },
-  tempo: (el) => { state.edit.song.tempo = el.dataset.k; saveSong(state.edit.song); render(); },
+  tempo: (el) => { rememberEdit(); state.edit.song.tempo = el.dataset.k; saveSong(state.edit.song); render(); },
 
   suggest: () => {
     const song = state.edit.song;
@@ -1365,16 +1879,15 @@ const ACTIONS = {
         { icon: '◀', label: '이 장을 앞으로', run: () => movePage(-1) },
         { icon: '▶', label: '이 장을 뒤로', run: () => movePage(1) },
       ] : []),
-      { icon: '🏷', label: '이 장의 라벨 모두 지우기', run: () => { song.labels = (song.labels || []).filter((l) => (l.page || 0) !== state.edit.page); saveSong(song); render(); } },
-      ...(state.view.weekId ? [{ icon: '➖', label: '이 주 콘티에서만 빼기', run: async () => {
-        const w = weekOf(state.view.weekId);
-        w.songs = w.songs.filter((e) => e.id !== state.view.entryId); await saveWeek(w);
-        go({ name: 'week', id: w.id }); toast('콘티에서 뺐어요. 곡은 보관함에 남아 있어요');
-      } }] : []),
-      { icon: '🗑', label: '곡 자체를 삭제 (보관함에서도)', danger: true, run: async () => {
-        if (!(await confirmSheet(`'${song.title}'을(를) 완전히 삭제할까요? 이 곡이 들어간 콘티에서도 사라집니다.`))) return;
+      { icon: '🏷', label: '이 장의 라벨 모두 지우기', run: () => { rememberEdit(); song.labels = (song.labels || []).filter((l) => (l.page || 0) !== state.edit.page); saveSong(song); render(); } },
+      ...(song.ownerWeekId ? [
+        { icon: '♪', label: '편집본을 보관함에 새 곡으로 저장', run: () => saveArrangementToLibrary(song) },
+      ] : []),
+      { icon: '🗑', label: song.ownerWeekId ? '이 콘티에서 빼기' : '보관함에서 삭제', danger: true, run: async () => {
+        if (!(await confirmSheet(song.ownerWeekId ? '이 콘티에서 곡을 뺄까요? 다른 콘티는 유지됩니다.' : '보관함에서 삭제할까요? 기존 콘티는 유지됩니다.'))) return;
+        const weekId = state.view.weekId;
         await deleteSongEverywhere(song);
-        go(state.view.weekId ? { name: 'week', id: state.view.weekId } : { name: 'library' });
+        go(weekId ? { name: 'week', id: weekId } : { name: 'library' });
       } },
     ]);
   },
@@ -1383,23 +1896,48 @@ const ACTIONS = {
   openSettings: () => menuSheet('설정', [
     { icon: '💾', label: '백업 파일 내려받기', run: backupExport },
     { icon: '📂', label: '백업 파일 불러오기', run: backupImport },
-    { icon: 'ℹ️', label: `곡 ${Object.keys(state.songs).length}개 · 주차 ${state.weeks.length}개 저장됨`, run: () => {} },
+    { icon: 'ℹ️', label: `곡 ${librarySongs().length}개 · 주차 ${state.weeks.length}개 저장됨`, run: () => {} },
   ]),
 };
 
 // ── 백업: 이 기기 브라우저에만 저장되므로, 기기를 바꾸거나 데이터를 지웠을 때를 위한 안전장치 ──
 const blobToDataURL = (b) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
 async function backupExport() {
+  await flushSaves();
   toast('백업을 만들고 있어요…');
   const songs = [];
   for (const s of Object.values(state.songs)) {
     const rec = toRecord({ ...s, sheets: [] });
     rec.sheets = [];
-    for (const sh of s.sheets) rec.sheets.push({ w: sh.w, h: sh.h, data: await blobToDataURL(sh.blob) });
+    for (const sh of s.sheets) rec.sheets.push({ w: sh.w, h: sh.h, excluded: !!sh.excluded, data: await blobToDataURL(sh.blob) });
     songs.push(rec);
   }
-  const payload = { app: 'konti', version: 1, exportedAt: new Date().toISOString(), songs, weeks: state.weeks.map(toRecord) };
+  const payload = { app: 'konti', version: 2, exportedAt: new Date().toISOString(), songs, weeks: state.weeks.map(toRecord) };
   download(new Blob([JSON.stringify(payload)], { type: 'application/json' }), `콘티 백업 ${toISO(new Date())}.json`);
+}
+async function restoreBackup(data) {
+  const songs = [], weeks = data.weeks.map(w => structuredClone(w));
+  for (const source of data.songs) {
+    if (!source.id || !Array.isArray(source.sheets)) throw new Error('곡 데이터가 올바르지 않습니다');
+    const sheets = [];
+    for (const sheet of source.sheets) {
+      if (typeof sheet.data !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(sheet.data)) throw new Error('백업 악보 이미지가 올바르지 않습니다');
+      const blob = await (await fetch(sheet.data)).blob();
+      await loadImage(blob);
+      sheets.push({ blob, w: sheet.w, h: sheet.h, excluded: !!sheet.excluded });
+    }
+    songs.push({ ...source, sheets });
+  }
+  const available = new Set([...Object.keys(state.songs), ...songs.map(s => s.id)]);
+  if (weeks.some(w => !w.id || !Array.isArray(w.songs) || w.songs.some(e => !available.has(e.songId)))) throw new Error('백업의 콘티에 없는 곡이 연결되어 있습니다');
+  songs.forEach(song => state.songs[song.id] = song);
+  for (const week of weeks) {
+    const i = state.weeks.findIndex(w => w.id === week.id);
+    if (i >= 0) state.weeks[i] = week; else state.weeks.push(week);
+  }
+  await persistRecords([...songs.map(song => ({ store: 'songs', value: songRecord(song) })),
+    ...weeks.map(week => ({ store: 'weeks', value: toRecord(week) }))]);
+  await flushSaves(); await isolateExistingWeeks();
 }
 async function backupImport() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
@@ -1407,15 +1945,10 @@ async function backupImport() {
     const f = inp.files[0]; if (!f) return;
     try {
       const data = JSON.parse(await f.text());
-      if (data.app !== 'konti') throw new Error('콘티 백업 파일이 아닙니다');
-      if (!(await confirmSheet(`곡 ${data.songs.length}개, 주차 ${data.weeks.length}개를 불러올까요? 같은 곡은 덮어씁니다.`, '불러오기'))) return;
-      for (const s of data.songs) {
-        const sheets = [];
-        for (const sh of s.sheets) { const blob = await (await fetch(sh.data)).blob(); sheets.push({ blob, w: sh.w, h: sh.h }); }
-        const song = { ...s, sheets };
-        state.songs[song.id] = song; await saveSong(song);
-      }
-      for (const w of data.weeks) { const i = state.weeks.findIndex((x) => x.id === w.id); if (i >= 0) state.weeks[i] = w; else state.weeks.push(w); await saveWeek(w); }
+      if (data.app !== 'konti' || ![1, 2].includes(data.version) || !Array.isArray(data.songs) || !Array.isArray(data.weeks)) throw new Error('지원하는 콘티 백업 파일이 아닙니다');
+      const libraryCount = data.songs.filter(s => !s.ownerWeekId).length;
+      if (!(await confirmSheet(`보관함 ${libraryCount}곡, 콘티 ${data.weeks.length}개를 불러올까요? 같은 항목은 덮어씁니다.`, '불러오기'))) return;
+      await restoreBackup(data);
       render(); toast('불러왔습니다');
     } catch (e) { toast(e.message || '불러오지 못했습니다', true); }
   };
@@ -1426,16 +1959,20 @@ async function backupImport() {
 (async function init() {
   try {
     db = await openDB();
-    const [songs, weeks] = await Promise.all([idbAll('songs'), idbAll('weeks')]);
+    const [songs, weeks, meta] = await Promise.all([idbAll('songs'), idbAll('weeks'), idbAll('meta')]);
+    state.formClipboard = meta.find(m => m.key === 'formClipboard') || null;
     for (const s of songs) state.songs[s.id] = { ...s, sheets: (s.sheets || []).map((sh) => ({ ...sh })) };
-    state.weeks = weeks;
+    state.weeks = weeks; state.loaded = true;
+    await isolateExistingWeeks();
+    updateSaveStatus();
     // 이번 달에 콘티가 없고 다른 달에 있으면 가장 최근 달을 보여준다
     if (!weeks.some((w) => monthOf(w.date) === state.month) && weeks.length) {
       state.month = monthOf(weeks.map((w) => w.date).sort().reverse()[0]);
     }
   } catch (e) {
     console.error(e);
-    toast('저장 공간을 열 수 없습니다. 다른 브라우저로 열어보세요', true);
+    updateSaveStatus();
+    toast('저장 공간을 열지 못했습니다. 상단의 다시 열기 또는 다시 시도를 눌러주세요.', true);
   }
   render();
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
