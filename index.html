@@ -103,9 +103,11 @@
   .bottom .btn { flex: 1; }
 
   /* 곡 편집 */
-  .stage { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; }
   .stage canvas { display: block; width: 100%; height: auto; }
   .stage .hint { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 10px; font-size: 12px; color: #fff; background: rgba(0,0,0,.45); text-align: center; pointer-events: none; }
+  .stage.edit-mode { touch-action:none; }
+  .score-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
   .stage.label-mode { outline: 3px solid var(--red); outline-offset: -3px; }
   .pages { display: flex; gap: 6px; justify-content: center; margin: 8px 0 4px; }
   .pages button { min-width: 40px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-weight: 700; font-size: 14px; }
@@ -261,7 +263,6 @@
 <div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
 <div id="toast" class="toast"></div>
 <div id="print"></div>
-<input id="filePick" type="file" accept="image/*" multiple hidden>
 
 <script>
 'use strict';
@@ -539,6 +540,7 @@ function copySongForWeek(source, week, form = source.lastForm || '') {
     ownerWeekId: week.id, lastForm: form, createdAt: Date.now(), updatedAt: Date.now(), lastExport: null };
 }
 async function attachSongs(week, sources) {
+  if (weekOf(week.id) !== week) throw new Error('콘티가 변경되었거나 삭제되었습니다. 다시 열어 주세요.');
   const copies = sources.map(s => copySongForWeek(s, week));
   const entries = copies.map(s => ({ id: uid(), songId: s.id, form: s.lastForm }));
   copies.forEach(s => state.songs[s.id] = s);
@@ -585,21 +587,32 @@ function weekSecs(week) {
 
 // ────────────────────────────── 이미지 처리 ──────────────────────────────
 function loadImage(blob) {
+  if (!(blob instanceof Blob) || !blob.size) return Promise.reject(new Error('악보 이미지가 비어 있습니다. 사진을 다시 선택해 주세요.'));
   return new Promise((res, rej) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
-    img.onload = () => { URL.revokeObjectURL(url); res(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('이미지를 읽을 수 없습니다')); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (!img.naturalWidth || !img.naturalHeight) rej(new Error('악보 이미지 크기를 읽지 못했습니다.'));
+      else res(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      rej(new Error(`${blob.name ? blob.name + ': ' : ''}사진을 읽지 못했습니다. JPG·PNG 사진이나 스크린샷으로 다시 추가해 주세요.`));
+    };
     img.src = url;
   });
 }
 function canvasToBlob(c, type = 'image/jpeg', q = 0.92) {
-  return new Promise((res) => c.toBlob((b) => res(b), type, q));
+  return new Promise((resolve, reject) => {
+    c.toBlob(blob => blob?.size ? resolve(blob) : reject(new Error('이미지 변환에 실패했습니다. 더 작은 사진으로 다시 시도해 주세요.')), type, q);
+  });
 }
 
 // 행마다 어두운 픽셀 비율. 폭 200으로 줄여서 빠르게 훑는다.
 function rowDarkness(img) {
-  const W = 200, H = Math.max(1, Math.round((img.height / img.width) * W));
+  const scale = Math.min(200 / img.width, 2400 / img.height, 1);
+  const W = Math.max(1, Math.round(img.width * scale)), H = Math.max(1, Math.round(img.height * scale));
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -629,9 +642,9 @@ function whiteRuns(rows, th = 0.006) {
 // 사진을 정리해서 저장용 시트로 만든다: 크기 줄이기 → 위쪽 여백 확보 → JPEG
 async function prepareSheet(file) {
   const img = await loadImage(file);
-  const maxW = 1800;
-  const scale = img.width > maxW ? maxW / img.width : 1;
-  let W = Math.round(img.width * scale), H = Math.round(img.height * scale);
+  // Bound both axes: long screenshots can otherwise exceed mobile canvas limits.
+  const scale = Math.min(1, 1800 / img.width, 3600 / img.height);
+  const W = Math.max(1, Math.round(img.width * scale)), H = Math.max(1, Math.round(img.height * scale));
 
   const rows = rowDarkness(img);
   let topWhite = 0;
@@ -645,9 +658,10 @@ async function prepareSheet(file) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
   ctx.drawImage(img, 0, pad, W, H);
-  URL.revokeObjectURL(img.src);
-  const blob = await canvasToBlob(c);
-  return { blob, w: c.width, h: c.height, padded: pad > 0 };
+  try {
+    const blob = await canvasToBlob(c);
+    return { blob, w: c.width, h: c.height, padded: pad > 0 };
+  } finally { c.width = 0; c.height = 0; }
 }
 
 // 송폼을 놓을 자리: 제목 바로 아래 여백 → 없으면 제목 위 여백 → 없으면 가장 넓은 여백
@@ -681,9 +695,9 @@ const FONT = '"Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto San
 const bitmapCache = new WeakMap();
 async function bitmapOf(sheet) {
   if (bitmapCache.has(sheet)) return bitmapCache.get(sheet);
-  const img = await loadImage(sheet.blob);
-  bitmapCache.set(sheet, img);
-  return img;
+  const pending = loadImage(sheet.blob).catch(error => { bitmapCache.delete(sheet); throw error; });
+  bitmapCache.set(sheet, pending);
+  return pending;
 }
 
 // 한 장을 그린다. 반환값은 드래그 판정용 상자들(정규화 좌표).
@@ -1249,9 +1263,10 @@ function viewSong(v) {
        <button class="btn" data-act="navSong" data-dir="1" ${idx >= week.songs.length - 1 ? 'disabled' : ''}>다음 ›</button>`
     : `<button class="btn" data-act="back">보관함으로</button>`;
   if (!state.edit || state.edit.song !== song) {
-    state.edit = { song, week, entry, page: 0, mode: 'move', labelText: 'V', selected: null, more: false, selChip: null, boxes: null };
+    state.edit = { song, week, entry, page: 0, mode: 'scroll', labelText: 'V', selected: null, more: false, selChip: null, boxes: null };
   }
   const ed = state.edit;
+  ed.dragPreview = null; ed.selected = null;
   const form = currentForm();
   const blocks = parseForm(form);
   const pages = song.sheets.map((_, i) => `<button class="${i === ed.page ? 'on' : ''}" data-act="page" data-i="${i}">${i + 1}장</button>`).join('');
@@ -1267,13 +1282,18 @@ function viewSong(v) {
     </div>
     <div class="wrap">
       ${song.sheets.length ? `
-        <div class="stage ${ed.mode === 'label' ? 'label-mode' : ''}" id="stage">
+        <div class="score-tools">
+          <button class="btn sm ${ed.mode === 'move' ? 'on' : ''}" data-act="toggleMove" aria-pressed="${ed.mode === 'move'}">${ed.mode === 'move' ? '위치 편집 끝' : '위치 편집'}</button>
+          <button class="btn sm ${ed.mode === 'label' ? 'on' : ''}" data-act="toggleLabel" aria-pressed="${ed.mode === 'label'}">${ed.mode === 'label' ? '라벨 끝' : '라벨 찍기'}</button>
+          <span class="muted small">${ed.mode === 'scroll' ? '스크롤 모드' : '편집을 마치면 스크롤 모드로 돌아가세요'}</span>
+        </div>
+        <div class="stage ${ed.mode !== 'scroll' ? 'edit-mode' : ''} ${ed.mode === 'label' ? 'label-mode' : ''}" id="stage">
           <canvas id="cv"></canvas>
-          <div class="hint">${ed.mode === 'label' ? '악보를 눌러 라벨을 찍고, 라벨을 다시 누르면 지워집니다' : '글자를 손가락으로 끌어 옮기세요'}</div>
+          <div class="hint">${ed.mode === 'label' ? '악보를 눌러 라벨을 찍고, 라벨을 다시 누르면 지워집니다' : ed.mode === 'move' ? '송폼 글자나 라벨을 직접 잡아 옮기세요' : '악보 위에서도 위아래로 스크롤할 수 있어요'}</div>
         </div>
         <div class="pages">${pages}<button class="add" data-act="addPage">＋ 장 추가</button></div>
         <div class="tools">
-          <button class="btn sm ${ed.mode === 'label' ? 'on' : ''}" data-act="toggleLabel">${ed.mode === 'label' ? '라벨 끝' : '라벨 찍기'}</button>
+          ${ed.mode !== 'scroll' ? '<button class="btn sm" data-act="finishScoreEdit">스크롤로 돌아가기</button>' : ''}
           <button class="btn sm" data-act="autoSlot">위치 자동</button>
           <button class="btn sm" data-act="removePage">이 장 삭제</button>
         </div>
@@ -1363,47 +1383,61 @@ async function afterSongRender() {
   if (state.edit !== ed || cv !== $('#cv')) return;
   await redraw();
 
-  // 드래그: 송폼 글자 또는 라벨을 잡아 옮긴다. 라벨 모드에서 빈 곳을 누르면 라벨 추가.
+  if (state.edit !== ed || cv !== $('#cv')) return;
+  // Scrolling is the default. Only explicit edit modes may consume a gesture,
+  // and only touching an actual annotation starts a move.
   let drag = null;
-  const norm = (e) => { const r = cv.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) }; };
+  const norm = e => { const r = cv.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) }; };
   const hit = (p, b) => b && p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
-  cv.addEventListener('pointerdown', (e) => {
-    const p = norm(e);
-    const boxes = ed.boxes || {};
-    const lb = (boxes.labels || []).find((b) => hit(p, b));
-    if (lb) drag = { type: 'label', i: lb.i, start: p, orig: { x: song.labels[lb.i].x, y: song.labels[lb.i].y }, moved: false };
-    else if (hit(p, boxes.form) && ed.mode !== 'label') drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false };
-    else if (ed.mode === 'label') drag = { type: 'new', start: p, moved: false };
-    else if (boxes.form) drag = { type: 'form', start: p, orig: { x: song.placement.x, y: song.placement.y }, moved: false, loose: true };
-    if (drag) { rememberEdit(); try { cv.setPointerCapture(e.pointerId); } catch (_) { /* 합성 이벤트 등 포인터가 없을 때 */ } ed.selected = drag.type === 'form' ? 'form' : null; }
-  });
-  cv.addEventListener('pointermove', (e) => {
+  const current = () => state.edit === ed && cv === $('#cv');
+  cv.addEventListener('pointerdown', e => {
+    if (!current() || ed.mode === 'scroll' || drag || e.isPrimary === false || e.button !== 0) return;
+    const p = norm(e), boxes = ed.boxes || {};
+    const lb = (boxes.labels || []).find(b => hit(p, b));
+    if (lb) drag = { type: 'label', i: lb.i, orig: { x: song.labels[lb.i].x, y: song.labels[lb.i].y } };
+    else if (ed.mode === 'move' && hit(p, boxes.form)) drag = { type: 'form', orig: { x: song.placement.x, y: song.placement.y } };
+    else if (ed.mode === 'label') drag = { type: 'new' };
     if (!drag) return;
-    const p = norm(e);
-    const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
-    if (Math.abs(dx) + Math.abs(dy) > 0.004) drag.moved = true;
-    if (!drag.moved) return;
-    if (drag.type === 'form') { song.placement.x = clamp(drag.orig.x + dx, 0.05, 0.95); song.placement.y = clamp(drag.orig.y + dy, 0.01, 0.99); }
-    else if (drag.type === 'label') { song.labels[drag.i].x = clamp(drag.orig.x + dx, 0.01, 0.99); song.labels[drag.i].y = clamp(drag.orig.y + dy, 0.01, 0.99); }
-    redraw();
+    Object.assign(drag, { pointerId: e.pointerId, start: p, clientX: e.clientX, clientY: e.clientY, moved: false });
+    try { cv.setPointerCapture(e.pointerId); } catch (_) { /* Synthetic pointer events. */ }
   });
-  const end = (e) => {
-    if (!drag) return;
+  cv.addEventListener('pointermove', e => {
+    if (!drag || !current() || drag.pointerId !== e.pointerId) return;
+    if (Math.hypot(e.clientX - drag.clientX, e.clientY - drag.clientY) > 6) drag.moved = true;
+    if (!drag.moved || drag.type === 'new') return;
+    const p = norm(e), minX = drag.type === 'form' ? .05 : .01;
+    drag.position = { x: clamp(drag.orig.x + p.x - drag.start.x, minX, 1 - minX), y: clamp(drag.orig.y + p.y - drag.start.y, .01, .99) };
+    // Preview only: cancelled gestures must never change or save the score.
+    ed.dragPreview = drag.type === 'form'
+      ? { placement: { ...song.placement, ...drag.position } }
+      : { labels: song.labels.map((label, i) => i === drag.i ? { ...label, ...drag.position } : label) };
+    ed.selected = drag.type === 'form' ? 'form' : null;
+    redraw().catch(reportError);
+  });
+  const end = (e, cancelled = false) => {
+    if (!drag || drag.pointerId !== e.pointerId) return;
     const d = drag; drag = null;
-    if (d.type === 'new' && !d.moved) {
-      song.labels = song.labels || [];
-      song.labels.push({ page: ed.page, x: d.start.x, y: d.start.y, text: ed.labelText, size: song.labelSize || 0.03 });
-    } else if (d.type === 'label' && !d.moved && ed.mode === 'label') {
-      song.labels.splice(d.i, 1);
-    } else if (d.type === 'form' && d.loose && !d.moved) {
-      return; // 빈 곳을 그냥 탭한 것
+    if (!current()) return;
+    ed.dragPreview = null; ed.selected = null;
+    let changed = false;
+    if (!cancelled) {
+      if (d.moved && d.position) {
+        rememberEdit();
+        Object.assign(d.type === 'form' ? song.placement : song.labels[d.i], d.position); changed = true;
+      } else if (!d.moved && ed.mode === 'label') {
+        rememberEdit();
+        if (d.type === 'new') (song.labels ||= []).push({ page: ed.page, x: d.start.x, y: d.start.y, text: ed.labelText, size: song.labelSize || .03 });
+        else if (d.type === 'label') song.labels.splice(d.i, 1);
+        changed = true;
+      }
     }
-    ed.selected = null;
-    saveSong(song);
-    redraw();
+    if (changed) saveSong(song);
+    redraw().catch(reportError);
   };
-  cv.addEventListener('pointerup', end);
-  cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerup', e => end(e));
+  cv.addEventListener('pointercancel', e => end(e, true));
+  cv.addEventListener('lostpointercapture', e => end(e, true));
+
 }
 async function redraw() {
   const ed = state.edit; if (!ed) return;
@@ -1411,7 +1445,7 @@ async function redraw() {
   const sheet = ed.song.sheets[ed.page]; if (!sheet) return;
   const img = await bitmapOf(sheet);
   if (state.edit !== ed || cv !== $('#cv') || ed.song.sheets[ed.page] !== sheet) return;
-  ed.boxes = drawPage(cv, img, { form: currentForm(), placement: ed.song.placement, labels: ed.song.labels, page: ed.page, selected: ed.selected });
+  ed.boxes = drawPage(cv, img, { form: currentForm(), placement: ed.dragPreview?.placement || ed.song.placement, labels: ed.dragPreview?.labels || ed.song.labels, page: ed.page, selected: ed.selected });
 }
 
 // ── 보관함 ──
@@ -1473,13 +1507,33 @@ function menuSheet(title, items) {
   });
 }
 function pickFiles() {
-  return new Promise((res) => {
-    const inp = $('#filePick');
-    inp.value = '';
-    inp.onchange = () => res(Array.from(inp.files || []));
-    inp.oncancel = () => res([]);
-    inp.click();
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.multiple = true; input.hidden = true;
+    const finish = files => { input.remove(); resolve(files); };
+    input.onchange = () => finish(Array.from(input.files || []));
+    input.oncancel = () => finish([]);
+    document.body.appendChild(input); input.click();
   });
+}
+let imageImportBusy = false;
+async function withImageImport(work) {
+  if (imageImportBusy) return toast('악보를 추가하고 있어요. 잠시 기다려 주세요.');
+  imageImportBusy = true;
+  try { return await work(); } finally { imageImportBusy = false; }
+}
+async function appendSongPages(song, files, editor) {
+  // Decode the entire selection before touching the saved score or undo history.
+  const sheets = [];
+  for (const file of files) sheets.push(await prepareSheet(file));
+  if (!sheets.length) return;
+  if (songOf(song.id) !== song) throw new Error('추가할 곡이 변경되었거나 삭제되었습니다. 곡을 다시 열어 주세요.');
+  const placement = song.placement || { ...detectSlot(await bitmapOf(sheets[0])), page: 0 };
+  if (state.edit === editor) rememberEdit();
+  song.sheets.push(...sheets); song.placement = placement;
+  await saveSong(song); await flushSaves();
+  if (state.edit === editor) { editor.page = song.sheets.length - 1; editor.mode = 'scroll'; render(); }
+  toast(`'${song.title}'에 악보 ${sheets.length}장을 추가했어요`);
 }
 
 // 새 곡 만들기: 사진 고르기 → 정리 → 저장
@@ -1671,7 +1725,7 @@ const ACTIONS = {
     const inLib = librarySongs();
     menuSheet('악보 추가', [
       { icon: '↗', label: '이전 콘티에서 곡 가져오기', run: () => browseForms(w) },
-      { icon: '📷', label: '악보 사진 넣기 · 여러 장 묶기', run: async () => {
+      { icon: '📷', label: '악보 사진 넣기 · 여러 장 묶기', run: () => withImageImport(async () => {
         const files = await pickFiles(); if (!files.length) return;
         const songs = await createSongsFromFiles(files, w.songs.length + 1);
         if (!songs.length) return;
@@ -1680,7 +1734,7 @@ const ACTIONS = {
         if (songs.length === 1) go({ name: 'song', songId: entries[0].songId, weekId: w.id, entryId: entries[0].id });
         else render();
         titleSheet(arrangements, songs);
-      } },
+      }) },
       { icon: '♪', label: `보관함에서 고르기 (${inLib.length}곡)`, run: () => {
         if (!inLib.length) return toast('보관함에 아직 곡이 없습니다');
         openSheet(`<h2>보관함에서 고르기</h2><input type="search" id="pickLibrarySearch" placeholder="곡 제목 · 키 검색" aria-label="추가할 곡 검색"><div class="list">${inLib.sort((a, b) => a.title.localeCompare(b.title, 'ko')).map((s) => `<button class="lib-item" data-id="${s.id}"><div class="thumb" ${s.sheets[0] ? `style="background-image:url('${sheetUrl(s.sheets[0])}')"` : ''}></div><div class="grow"><div class="t ellip">${h(s.title)}${s.key ? ` <span class="muted">${h(s.key)}</span>` : ''}</div><div class="f ellip">${s.lastForm ? formHtml(s.lastForm) : '송폼 없음'}</div></div></button>`).join('')}</div>`, (bg) => {
@@ -1733,22 +1787,20 @@ const ACTIONS = {
     if (!(await confirmSheet(`보관함에서 '${song.title}'을(를) 삭제할까요? 기존 콘티의 편집본은 유지됩니다.`))) return;
     await deleteSongEverywhere(song); render(); toast('삭제했어요');
   },
-  newSongInLibrary: async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, librarySongs().length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); },
+  newSongInLibrary: () => withImageImport(async () => { const files = await pickFiles(); if (!files.length) return; const songs = await createSongsFromFiles(files, librarySongs().length + 1); if (songs.length === 1) go({ name: 'song', songId: songs[0].id }); else render(); titleSheet(songs); }),
   navSong: (el) => {
     const v = state.view; const w = weekOf(v.weekId);
     const e = w.songs[w.songs.findIndex((x) => x.id === v.entryId) + +el.dataset.dir];
     if (!e) return; if (!songOf(e.songId)) return toast('삭제된 곡입니다', true);
     go({ name: 'song', songId: e.songId, weekId: w.id, entryId: e.id });
   },
-  page: (el) => { state.edit.page = +el.dataset.i; state.edit.selected = null; render(); },
-  addPage: async () => {
+  page: (el) => { state.edit.page = +el.dataset.i; state.edit.mode = 'scroll'; state.edit.selected = null; render(); },
+  addPage: () => withImageImport(async () => {
+    const editor = state.edit, song = editor?.song;
+    if (!song) return;
     const files = await pickFiles(); if (!files.length) return;
-    const song = state.edit.song;
-    rememberEdit();
-    for (const f of files) song.sheets.push(await prepareSheet(f));
-    if (!song.placement) song.placement = { ...detectSlot(await bitmapOf(song.sheets[0])), page: 0 };
-    await saveSong(song); state.edit.page = song.sheets.length - 1; render();
-  },
+    await appendSongPages(song, files, editor);
+  }),
   removePage: async () => {
     const ed = state.edit; const song = ed.song;
     if (!(await confirmSheet(`${ed.page + 1}장을 삭제할까요?`))) return;
@@ -1762,7 +1814,9 @@ const ACTIONS = {
     }
     ed.page = Math.max(0, ed.page - 1); await saveSong(song); render();
   },
-  toggleLabel: () => { state.edit.mode = state.edit.mode === 'label' ? 'move' : 'label'; state.edit.selected = null; render(); },
+  toggleMove: () => { state.edit.mode = state.edit.mode === 'move' ? 'scroll' : 'move'; render(); },
+  toggleLabel: () => { state.edit.mode = state.edit.mode === 'label' ? 'scroll' : 'label'; render(); },
+  finishScoreEdit: () => { state.edit.mode = 'scroll'; render(); },
   labelText: (el) => { state.edit.labelText = el.dataset.t; render(); },
   autoSlot: async () => {
     const ed = state.edit; const song = ed.song;
