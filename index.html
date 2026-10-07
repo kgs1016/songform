@@ -217,6 +217,16 @@
   body { padding-top:26px; }
   .top { top:26px; }
   .top h1 button { font-weight:inherit; }
+  .hymn-options { border:0; padding:0; margin:0; min-width:0; }
+  .hymn-verses { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .hymn-options .hymn-choice { color:var(--text); font-size:14px; margin-bottom:0; display:flex; gap:8px; align-items:center; min-height:48px; padding:6px 8px; border:1px solid var(--line); border-radius:10px; cursor:pointer; }
+  .hymn-choice:has(input:checked) { background:var(--accent-soft); border-color:var(--accent); }
+  .hymn-choice input { margin:0; }
+  .hymn-verses .hymn-choice { justify-content:center; padding:6px 4px; gap:4px; }
+  .hymn-options .seg .hymn-choice { flex:1; min-width:0; padding:6px 4px; gap:4px; font-size:13px; white-space:nowrap; }
+  .hymn-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .hymn-row .hymn-choice { flex:1; }
+  .hymn-preview { overflow-wrap:anywhere; font-weight:700; margin-top:6px; }
   .edit-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
   .export-note { margin:10px 0; overflow-wrap:anywhere; }
   .preview-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:14px 0; }
@@ -1097,8 +1107,8 @@ function viewWeek(id) {
 
 // ── 곡 편집 (핵심 화면) ──
 const MAIN_BLOCKS = [['Intro', '전주'], ['V1', '1절'], ['V2', '2절'], ['P.C', '프리코러스'], ['C', '후렴'], ['B', '브리지'], ['inter', '간주'], ['outro', '후주']];
-const MORE_BLOCKS = [['V', '절'], ['V3', '3절'], ['C1', '후렴1'], ['C2', '후렴2'], ['A', 'A'], ['D', 'D'], ['E', 'E'], ['inter1', '간주1'], ['inter2', '간주2'], ['inter3', '간주3'], ['Ending', '엔딩']];
-const LABEL_TEXTS = ['V', 'V1', 'V2', 'P.C', 'C', 'C1', 'C2', 'B', 'A', 'D', 'E', 'Intro', 'inter', 'outro'];
+const MORE_BLOCKS = [['V', '절'], ['V3', '3절'], ['V4', '4절'], ['C1', '후렴1'], ['C2', '후렴2'], ['A', 'A'], ['D', 'D'], ['E', 'E'], ['inter1', '간주1'], ['inter2', '간주2'], ['inter3', '간주3'], ['Ending', '엔딩']];
+const LABEL_TEXTS = ['V', 'V1', 'V2', 'V3', 'V4', 'P.C', 'C', 'C1', 'C2', 'B', 'A', 'D', 'E', 'Intro', 'inter', 'outro'];
 
 function currentForm() {
   const e = state.edit;
@@ -1134,6 +1144,104 @@ function setForm(text) {
   if (e.entry) e.entry.form = text;
   song.lastForm = text;
   saveSong(song);
+}
+
+// Hymns follow explicitly chosen verses, never a target-duration heuristic.
+function buildHymnForm(opt) {
+  const verses = [...opt.verses].sort((a, b) => a - b);
+  if (!verses.length) return '';
+  const names = opt.intro ? ['Intro'] : [];
+  verses.forEach((verse, i) => {
+    if (i && opt.inter) names.push('inter');
+    names.push(`V${verse}`);
+    if (opt.chorus === 'each' || (opt.chorus === 'last' && i === verses.length - 1)) names.push('C');
+  });
+  if (opt.outro) names.push('outro');
+  return names.join('-');
+}
+function hymnOptionsFromForm(form) {
+  const defaults = { verses: new Set([1, 2, 3, 4]), chorus: 'none', intro: false, inter: false, outro: false };
+  const blocks = parseForm(form);
+  if (!blocks.length || blocks.some(b => b.repeat !== 1 || b.note || !/^(V[1-9][0-9]?|C|Intro|inter|outro)$/.test(b.name))) return defaults;
+  const opt = { verses: new Set(blocks.filter(b => /^V/.test(b.name)).map(b => +b.name.slice(1))),
+    intro: blocks[0].name === 'Intro', inter: blocks.some(b => b.name === 'inter'), outro: blocks.at(-1).name === 'outro' };
+  // Reuse only an exact supported arrangement; custom notes/repeats stay visible in the comparison.
+  for (const chorus of ['none', 'each', 'last']) {
+    opt.chorus = chorus;
+    if (buildHymnForm(opt) === serializeForm(blocks)) return opt;
+  }
+  return defaults;
+}
+function openHymnForm() {
+  const target = state.edit; if (!target) return;
+  const original = currentForm() || '';
+  const opt = hymnOptionsFromForm(original);
+  let verseCount = Math.max(4, ...opt.verses), active = true, applying = false;
+  openSheet(`<h2 id="hymnTitle">찬송가 빠른 작성</h2>
+    <fieldset class="hymn-options" id="hymnOptions" aria-label="찬송가 송폼 설정">
+      <div class="field"><label>부를 절</label><div class="hymn-verses" id="hymnVerses"></div>
+        <div class="hymn-row"><button class="btn sm" id="hymnAddVerse"></button><button class="btn sm" id="hymnAllVerses"></button></div>
+      </div>
+      <div class="field"><label id="hymnChorusLabel">후렴</label><div class="seg" role="radiogroup" aria-labelledby="hymnChorusLabel">
+        ${[['none', '없음'], ['each', '매 절 뒤'], ['last', '마지막만']].map(([value, label]) => `<label class="hymn-choice"><input type="radio" name="hymnChorus" value="${value}" ${opt.chorus === value ? 'checked' : ''}>${label}</label>`).join('')}
+      </div></div>
+      <div class="field"><label>연주 구간</label><div class="hymn-row">
+        ${[['intro', '전주'], ['outro', '후주']].map(([key, label]) => `<label class="hymn-choice"><input type="checkbox" id="hymn-${key}" ${opt[key] ? 'checked' : ''}>${label}</label>`).join('')}
+      </div><label class="hymn-choice" style="margin-top:8px"><input type="checkbox" id="hymn-inter" ${opt.inter ? 'checked' : ''}>선택한 절 사이마다 간주</label></div>
+    </fieldset>
+    ${original ? `<details><summary class="small muted">현재 송폼 보기</summary><div class="hymn-preview">${formHtml(original)}</div></details>` : ''}
+    <div class="form-comparison" aria-live="polite"><div class="muted small">적용할 송폼</div><div class="hymn-preview" id="hymnPreview"></div></div>
+    <p class="small muted">선택한 절을 번호순으로 넣습니다. 적용 후 구간을 자유롭게 수정하고 실행 취소할 수 있어요.</p>
+    <div class="actions"><button class="btn" id="hymnCancel">취소</button><button class="btn primary" id="hymnApply">${original ? '송폼 바꾸기' : '송폼 넣기'}</button></div>
+    <p class="muted small" id="hymnStatus" role="status"></p>`, bg => {
+    $('.sheet', bg).setAttribute('aria-labelledby', 'hymnTitle');
+    const update = () => {
+      const form = buildHymnForm(opt);
+      $('#hymnPreview', bg).innerHTML = form ? formHtml(form) : '부를 절을 하나 이상 선택하세요.';
+      $('#hymnApply', bg).disabled = !form || applying;
+      $('#hymnOptions', bg).disabled = applying;
+      $('#hymnAllVerses', bg).textContent = opt.verses.size === verseCount ? '전체 선택 해제' : '전체 선택';
+    };
+    const drawVerses = () => {
+      $('#hymnVerses', bg).innerHTML = Array.from({ length: verseCount }, (_, i) => i + 1).map(n =>
+        `<label class="hymn-choice"><input type="checkbox" data-hymn-verse="${n}" ${opt.verses.has(n) ? 'checked' : ''}>${n}절</label>`).join('');
+      $('#hymnAddVerse', bg).textContent = `＋ ${verseCount + 1}절 추가`;
+      $('#hymnAddVerse', bg).hidden = verseCount >= 99;
+      update();
+    };
+    $('#hymnVerses', bg).onchange = event => {
+      const input = event.target, n = +input.dataset.hymnVerse;
+      if (!n) return;
+      if (input.checked) opt.verses.add(n); else opt.verses.delete(n);
+      update();
+    };
+    $('#hymnAddVerse', bg).onclick = () => {
+      if (verseCount >= 99) return;
+      opt.verses.add(++verseCount); drawVerses();
+      $(`[data-hymn-verse="${verseCount}"]`, bg).focus({ preventScroll: true });
+    };
+    $('#hymnAllVerses', bg).onclick = () => {
+      opt.verses = opt.verses.size === verseCount ? new Set() : new Set(Array.from({ length: verseCount }, (_, i) => i + 1));
+      drawVerses();
+    };
+    $$('input[name=hymnChorus]', bg).forEach(input => input.onchange = () => { opt.chorus = input.value; update(); });
+    for (const key of ['intro', 'inter', 'outro']) $('#hymn-' + key, bg).onchange = event => { opt[key] = event.target.checked; update(); };
+    $('#hymnCancel', bg).onclick = closeSheet;
+    $('#hymnApply', bg).onclick = async () => {
+      const form = buildHymnForm(opt);
+      if (!active || applying || !form || state.edit !== target) return;
+      applying = true; update();
+      if (form !== currentForm()) { setForm(form); target.selChip = null; }
+      try {
+        await flushSaves();
+        if (active) { closeSheet(); render(); toast('찬송가 송폼을 넣었어요. 실행 취소로 되돌릴 수 있어요.'); }
+      } catch (error) {
+        applying = false;
+        if (active) { update(); $('#hymnStatus', bg).textContent = error.message; }
+      }
+    };
+    drawVerses();
+  }, () => { active = false; });
 }
 
 // A copied form is a string snapshot: applying it never links two arrangements.
@@ -1323,7 +1431,10 @@ function viewSong(v) {
         <div class="edit-shortcuts">
           <button class="btn sm" data-act="undoEdit" ${ed.undo?.length ? '' : 'disabled'}>↶ 실행 취소</button>
           <button class="btn sm" data-act="redoEdit" ${ed.redo?.length ? '' : 'disabled'}>↷ 다시 실행</button>
+        </div>
+        <div class="two">
           <button class="btn sm" data-act="typeForm">직접 입력</button>
+          <button class="btn sm soft" data-act="hymnForm">찬송가 작성</button>
         </div>
         <div class="form-reuse">
           <button class="btn sm" data-act="copyForm" ${blocks.length ? '' : 'disabled'}>송폼 복사</button>
@@ -1899,6 +2010,8 @@ const ACTIONS = {
     setForm(serializeForm(parseForm(v))); state.edit.more = false; render();
   },
   tempo: (el) => { rememberEdit(); state.edit.song.tempo = el.dataset.k; saveSong(state.edit.song); render(); },
+
+  hymnForm: () => openHymnForm(),
 
   suggest: () => {
     const song = state.edit.song;
