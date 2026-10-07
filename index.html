@@ -261,6 +261,14 @@
   .toast { width:max-content; max-width:calc(100vw - 32px); }
   @media print { body { padding-top:0; } }
 
+  .prior-form { margin-top:12px; }
+  .prior-form h3 { margin:0 0 8px; font-size:16px; }
+  .prior-form .prior-preview { overflow-wrap:anywhere; font-weight:700; margin:10px 0; }
+  .prior-form select { width:100%; min-height:44px; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); margin-top:8px; }
+  .prior-form .prior-meta { overflow-wrap:anywhere; margin:4px 0; }
+  .draft-tools { margin-top:12px; color:var(--muted); font-size:14px; }
+  .draft-tools summary { cursor:pointer; padding:8px 0; }
+  .draft-tools .btn { margin-top:8px; }
   .form-reuse { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 16px; }
   textarea { width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--bg); color:var(--text); resize:vertical; line-height:1.6; }
   .form-comparison { border:1px solid var(--line); border-radius:12px; padding:14px; margin:14px 0; overflow-wrap:anywhere; line-height:1.7; }
@@ -1095,10 +1103,11 @@ function viewWeek(id) {
         <button data-act="setTarget" data-id="${w.id}">목표 ${w.target || 20}분 ›</button>
       </div>
       ${rows || `<div class="empty">아직 악보가 없습니다.<br><b>악보 추가</b>에서 사진을 여러 장 고르면<br>한 곡의 여러 장을 묶을 수 있습니다.</div>`}
-      <div class="two" style="margin-top:4px">
-        <button class="btn" data-act="addSong" data-id="${w.id}">＋ 악보 추가</button>
-        <button class="btn soft" data-act="suggestWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>✨ 전체 추천</button>
-      </div>
+      <button class="btn block" style="margin-top:4px" data-act="addSong" data-id="${w.id}">＋ 악보 추가</button>
+      <details class="draft-tools"><summary>전체 기본 초안 · 시간 기준</summary>
+        <p class="small">이미 적은 송폼도 바뀝니다. 곡별로 이전 송폼을 가져오거나 직접 작성한 뒤, 필요한 경우에만 사용하세요.</p>
+        <button class="btn sm" data-act="suggestWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>전체 초안 만들기</button>
+      </details>
     </div>
     <div class="bottom"><div class="inner">
       <button class="btn primary" data-act="pdfWeek" data-id="${w.id}" ${w.songs.length ? '' : 'disabled'}>전체 미리보기 · PDF 공유</button>
@@ -1258,19 +1267,19 @@ async function copyForm() {
   if (!saved) return toast('송폼을 복사했지만 기기에 보관하지 못했어요. 상단에서 저장을 다시 시도하세요.', true);
   toast(onClipboard ? '송폼을 복사했어요. 다른 곡에서 붙여넣으세요.' : '앱 안에 복사했어요. 다른 곡에서 송폼 붙여넣기를 누르세요.');
 }
-function pasteForm(copied = state.formClipboard) {
+function pasteForm(copied = state.formClipboard, editPrevious = false) {
   const target = state.edit;
   if (!target) return;
   const original = currentForm() || '';
   let active = true, applying = false;
-  openSheet(`<div class="row"><h2 class="grow">송폼 붙여넣기</h2><button class="btn sm" id="pasteCancel">취소</button></div>
+  openSheet(`<div class="row"><h2 class="grow">${editPrevious ? '이전 송폼 수정' : '송폼 붙여넣기'}</h2><button class="btn sm" id="pasteCancel">취소</button></div>
     <p class="muted small" id="pasteSource">${copied ? `${h(copied.title)} · ${h(copied.source)}` : '복사한 송폼을 아래에 붙여넣으세요.'}</p>
-    <label class="field">가져올 송폼<textarea id="pasteText" rows="3" placeholder="Intro-V1-C-V2-Cx2-outro">${h(copied?.text || '')}</textarea></label>
-    <button class="btn sm" id="readClipboard">기기 클립보드에서 읽기</button>
+    <label class="field">${editPrevious ? '이번에 쓸 송폼' : '가져올 송폼'}<textarea id="pasteText" rows="3" placeholder="Intro-V1-C-V2-Cx2-outro">${h(copied?.text || '')}</textarea></label>
+    ${editPrevious ? '' : '<button class="btn sm" id="readClipboard">기기 클립보드에서 읽기</button>'}
     <div class="form-comparison"><div class="muted small">현재 송폼</div><div>${original ? formHtml(original) : '송폼 없음'}</div>
-    <div class="muted small">붙여넣을 송폼</div><div id="pastePreview"></div></div>
+    <div class="muted small">${editPrevious ? '적용할 송폼' : '붙여넣을 송폼'}</div><div id="pastePreview"></div></div>
     <p class="muted small">이 곡의 송폼만 바뀝니다. 악보·라벨·위치는 유지되며 실행 취소할 수 있어요.</p>
-    <div class="actions"><button class="btn" id="pasteAppend">뒤에 이어 붙이기</button><button class="btn primary" id="pasteReplace">${original ? '현재 송폼 바꾸기' : '송폼 넣기'}</button></div>
+    <div class="actions">${editPrevious ? '' : '<button class="btn" id="pasteAppend">뒤에 이어 붙이기</button>'}<button class="btn primary" id="pasteReplace">${original ? '현재 송폼 바꾸기' : '송폼 넣기'}</button></div>
     <p class="muted small" id="pasteStatus" role="status"></p>`, bg => {
     const input = $('#pasteText', bg);
     const normalized = () => serializeForm(parseForm(input.value.trim()));
@@ -1278,11 +1287,11 @@ function pasteForm(copied = state.formClipboard) {
       const text = normalized();
       $('#pastePreview', bg).innerHTML = text ? formHtml(text) : '붙여넣을 송폼이 없습니다';
       $('#pasteReplace', bg).disabled = !text || applying;
-      $('#pasteAppend', bg).disabled = !text || applying;
+      if ($('#pasteAppend', bg)) $('#pasteAppend', bg).disabled = !text || applying;
     };
     input.oninput = () => { $('#pasteSource', bg).textContent = '직접 입력하거나 붙여넣은 송폼'; update(); };
     $('#pasteCancel', bg).onclick = closeSheet;
-    $('#readClipboard', bg).onclick = async () => {
+    if ($('#readClipboard', bg)) $('#readClipboard', bg).onclick = async () => {
       try {
         if (!navigator.clipboard?.readText) throw new Error('unsupported');
         const text = await navigator.clipboard.readText();
@@ -1309,10 +1318,20 @@ function pasteForm(copied = state.formClipboard) {
         if (active) { update(); $('#pasteStatus', bg).textContent = error.message; }
       }
     };
-    $('#pasteAppend', bg).onclick = () => apply(true);
+    if ($('#pasteAppend', bg)) $('#pasteAppend', bg).onclick = () => apply(true);
     $('#pasteReplace', bg).onclick = () => apply(false);
     update();
   }, () => { active = false; });
+}
+function formMatch(song, target) {
+  if (!target) return '';
+  if ((song.sourceSongId || song.id) === (target.sourceSongId || target.id)) return 'origin';
+  const normalize = title => (title || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  const title = normalize(target.title);
+  // Default labels and camera filenames are not reliable song identities.
+  if (!title || /^(제목\s*없음|곡\s*\d+|악보\s*\d*|[0-9]+)$/.test(title)
+    || /^(img[_ -]?\d|dsc[_ -]?\d|kakaotalk|screenshot|스크린샷|photo[_ -]?\d)/i.test(title)) return '';
+  return normalize(song.title) === title ? 'title' : '';
 }
 function reusableForms(targetSong) {
   const sources = [];
@@ -1320,17 +1339,46 @@ function reusableForms(targetSong) {
     for (const entry of week.songs) {
       const song = songOf(entry.songId), text = entryForm(entry, song).trim();
       if (!song || !text || song === targetSong) continue;
-      sources.push({ song, text, title: song.title, source: `${weekTitle(week)} · ${week.date}`, date: week.date });
+      sources.push({ song, text, title: song.title, source: `${weekTitle(week)} · ${week.date}`, date: week.date, weekId: week.id, key: `week:${week.id}:${entry.id}` });
     }
   }
   for (const song of librarySongs()) {
-    if (song !== targetSong && song.lastForm?.trim()) sources.push({ song, text: song.lastForm, title: song.title, source: '곡 보관함', date: '' });
+    if (song !== targetSong && song.lastForm?.trim()) sources.push({ song, text: song.lastForm.trim(), title: song.title, source: '곡 보관함', date: '', key: `library:${song.id}` });
   }
-  const sameSong = song => targetSong && ((song.sourceSongId || song.id) === (targetSong.sourceSongId || targetSong.id)
-    || song.title.trim().toLocaleLowerCase() === targetSong.title.trim().toLocaleLowerCase());
-  return sources.map(s => ({ ...s, match: !!sameSong(s.song) }))
-    .sort((a, b) => Number(b.match) - Number(a.match) || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'ko'));
+  const rank = { origin: 2, title: 1, '': 0 };
+  return sources.map(source => { const matchType = formMatch(source.song, targetSong); return { ...source, match: !!matchType, matchType }; })
+    .sort((a, b) => rank[b.matchType] - rank[a.matchType] || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'ko'));
 }
+function priorForms(editor) {
+  return reusableForms(editor.song).filter(source => source.match
+    && (!editor.week || !source.weekId || (source.weekId !== editor.week.id && source.date < editor.week.date)));
+}
+function priorFormPanel(editor, sources) {
+  if (!sources.length) return `<div class="card prior-form"><h3>송폼 작성</h3>
+    <p class="muted small">같은 곡의 이전 기록이 없습니다. 직접 적거나 찬송가의 절을 골라 시작하세요.</p>
+    <div class="two"><button class="btn sm" data-act="typeForm">직접 입력</button><button class="btn sm soft" data-act="hymnForm">찬송가 작성</button></div></div>`;
+  const source = sources.find(item => item.key === editor.priorFormKey) || sources[0];
+  editor.priorFormKey = source.key;
+  const unchanged = serializeForm(parseForm(currentForm())) === serializeForm(parseForm(source.text));
+  return `<div class="card prior-form"><h3>이 곡의 이전 송폼</h3>
+    ${sources.length > 1 ? `<label class="small muted" for="priorFormSource">기록 ${sources.length}개 · 날짜와 출처로 선택</label>
+      <select id="priorFormSource">${sources.map(item => `<option value="${h(item.key)}" ${item.key === source.key ? 'selected' : ''}>${h(item.source)}${item.song.key ? ` · ${h(item.song.key)}키` : ''}</option>`).join('')}</select>` : `<div class="muted small prior-meta">${h(source.source)}</div>`}
+    <div class="muted small prior-meta">${h(source.title)} · ${source.song.key ? `${h(source.song.key)}키` : '키 미등록'}${source.matchType === 'title' ? ' · 같은 제목으로 찾은 기록' : ''}</div>
+    <div class="prior-preview">${formHtml(source.text)}</div>
+    <div class="two"><button class="btn sm primary" data-act="usePriorForm" data-key="${h(source.key)}" ${unchanged ? 'disabled' : ''}>${unchanged ? '현재와 같음' : '그대로 사용'}</button>
+      <button class="btn sm" data-act="editPriorForm" data-key="${h(source.key)}">수정해서 사용</button></div>
+    <p class="muted small" style="margin:8px 0 0">${unchanged ? '현재 송폼에 같은 순서가 들어 있어요.' : currentForm()?.trim() ? '현재 송폼을 바꿉니다. 실행 취소로 되돌릴 수 있어요.' : '악보는 유지하고 송폼만 가져옵니다.'}</p>
+  </div>`;
+}
+function usePriorForm(key, editFirst) {
+  const editor = state.edit; if (!editor) return;
+  const source = priorForms(editor).find(item => item.key === key);
+  if (!source) { render(); return toast('기록이 바뀌었어요. 다시 선택해 주세요.'); }
+  if (editFirst) return pasteForm(source, true);
+  if (currentForm() !== source.text) { setForm(source.text); editor.selChip = null; }
+  render(); toast('이전 송폼을 가져왔어요. 실행 취소로 되돌릴 수 있어요.');
+}
+
 function browseForms(week = null) {
   const target = week ? null : state.edit;
   if (!week && !target) return;
@@ -1344,7 +1392,7 @@ function browseForms(week = null) {
       const query = $('#formHistorySearch', bg).value.trim().toLocaleLowerCase();
       const found = sources.map((s, i) => ({ s, i })).filter(({s}) => `${s.title} ${s.song.key || ''} ${s.source}`.toLocaleLowerCase().includes(query));
       $('#formHistoryList', bg).innerHTML = found.map(({s, i}) => `<button class="form-history-item" data-source="${i}">
-        <div><b>${h(s.title)}</b>${s.match ? ' <span class="same-song">같은 곡</span>' : ''} ${h(s.song.key || '')}</div>
+        <div><b>${h(s.title)}</b>${s.match ? `<span class="same-song"> ${s.matchType === 'origin' ? '같은 곡' : '같은 제목'}</span>` : ''} ${h(s.song.key || '')}</div>
         <div class="muted small">${h(s.source)}</div><div class="history-form">${formHtml(s.text)}</div>
       </button>`).join('') || '<div class="empty">가져올 송폼이 없습니다.</div>';
       $$('[data-source]', bg).forEach(button => button.onclick = () => {
@@ -1384,6 +1432,7 @@ function viewSong(v) {
   }
   const ed = state.edit;
   ed.dragPreview = null; ed.selected = null;
+  const prior = priorForms(ed);
   const form = currentForm();
   const blocks = parseForm(form);
   const pages = song.sheets.map((_, i) => `<button class="${i === ed.page ? 'on' : ''}" data-act="page" data-i="${i}">${i + 1}장</button>`).join('');
@@ -1401,6 +1450,7 @@ function viewSong(v) {
       <button class="icon" data-act="songMenu">⋯</button>
     </div>
     <div class="wrap">
+      ${priorFormPanel(ed, prior)}
       ${song.sheets.length ? `
         <div class="score-tools">
           <button class="btn sm ${ed.mode === 'move' ? 'on' : ''}" data-act="toggleMove" aria-pressed="${ed.mode === 'move'}">${ed.mode === 'move' ? '위치 편집 끝' : '위치 편집'}</button>
@@ -1432,10 +1482,10 @@ function viewSong(v) {
           <button class="btn sm" data-act="undoEdit" ${ed.undo?.length ? '' : 'disabled'}>↶ 실행 취소</button>
           <button class="btn sm" data-act="redoEdit" ${ed.redo?.length ? '' : 'disabled'}>↷ 다시 실행</button>
         </div>
-        <div class="two">
+        ${prior.length ? `<div class="two">
           <button class="btn sm" data-act="typeForm">직접 입력</button>
           <button class="btn sm soft" data-act="hymnForm">찬송가 작성</button>
-        </div>
+        </div>` : ''}
         <div class="form-reuse">
           <button class="btn sm" data-act="copyForm" ${blocks.length ? '' : 'disabled'}>송폼 복사</button>
           <button class="btn sm" data-act="pasteForm">송폼 붙여넣기</button>
@@ -1466,10 +1516,11 @@ function viewSong(v) {
           ${MAIN_BLOCKS.map(blockBtn).join('')}
           ${ed.more ? MORE_BLOCKS.map(blockBtn).join('') + `<button class="more" data-act="typeForm">직접<br>입력</button>` : `<button class="more" data-act="moreBlocks">더보기 ▾</button>`}
         </div>
-        <div class="two" style="margin-top:10px">
-          <button class="btn soft" data-act="suggest">✨ 추천 받기</button>
-          <button class="btn" data-act="clearForm" ${blocks.length ? '' : 'disabled'}>모두 지우기</button>
-        </div>
+        <button class="btn sm" style="margin-top:10px" data-act="clearForm" ${blocks.length ? '' : 'disabled'}>모두 지우기</button>
+        <details class="draft-tools"><summary>기본 초안 · 시간 기준</summary>
+          <p class="small">절 수와 목표 시간으로 만드는 출발점입니다. 실제 악보 구조와 다를 수 있으니 적용 전에 순서를 확인하세요.</p>
+          <button class="btn sm" data-act="suggest">기본 초안 만들기</button>
+        </details>
       </div>
 
       <div class="section">
@@ -1495,6 +1546,7 @@ async function afterSongRender() {
   const ed = state.edit;
   const song = ed.song;
   const cv = $('#cv');
+  $('#priorFormSource')?.addEventListener('change', event => { ed.priorFormKey = event.target.value; render(); $('#priorFormSource')?.focus({ preventScroll: true }); });
   $('#fTitle')?.addEventListener('focus', rememberEdit);
   $('#fKey')?.addEventListener('focus', rememberEdit);
   $('#fTitle')?.addEventListener('input', (e) => { song.title = e.target.value.trim() || '제목 없음'; saveSong(song); $('.top h1').textContent = song.title; });
@@ -2011,6 +2063,8 @@ const ACTIONS = {
   },
   tempo: (el) => { rememberEdit(); state.edit.song.tempo = el.dataset.k; saveSong(state.edit.song); render(); },
 
+  usePriorForm: el => usePriorForm(el.dataset.key, false),
+  editPriorForm: el => usePriorForm(el.dataset.key, true),
   hymnForm: () => openHymnForm(),
 
   suggest: () => {
@@ -2031,10 +2085,10 @@ const ACTIONS = {
         opt[key] = v; draw(bg);
       });
     };
-    openSheet(`<h2>✨ 송폼 추천</h2><div id="sgBody"></div>
+    openSheet(`<h2>송폼 기본 초안</h2><div id="sgBody"></div>
       <div class="actions"><button class="btn" id="sgNo">취소</button><button class="btn primary" id="sgOk">이 송폼으로</button></div>`, (bg) => {
       draw(bg);
-      $('#sgOk', bg).onclick = () => { Object.assign(song, { tempo: opt.tempo, verses: opt.verses, bridge: opt.bridge }); setForm(suggestForm(opt)); state.edit.selChip = null; closeSheet(); render(); toast('추천 송폼을 넣었어요. 블록을 눌러 고칠 수 있어요'); };
+      $('#sgOk', bg).onclick = () => { Object.assign(song, { tempo: opt.tempo, verses: opt.verses, bridge: opt.bridge }); setForm(suggestForm(opt)); state.edit.selChip = null; closeSheet(); render(); toast('기본 초안을 넣었어요. 블록을 눌러 고칠 수 있어요'); };
       $('#sgNo', bg).onclick = closeSheet;
     });
   },
@@ -2070,7 +2124,7 @@ const ACTIONS = {
         opt.per[i][key] = v; draw(bg);
       });
     };
-    openSheet(`<h2>✨ 송폼 전체 추천</h2><p class="muted small" style="margin:-8px 0 12px">곡마다 절 수·브리지·빠르기만 골라주면 ${items.length}곡을 시간에 맞춰 나눠 짭니다. 한 번 고른 건 기억합니다.</p><div id="swBody"></div>
+    openSheet(`<h2>시간 기준 전체 초안</h2><p class="muted small" style="margin:-8px 0 12px">곡마다 절 수·브리지·빠르기만 골라주면 ${items.length}곡을 시간에 맞춰 나눠 짭니다. 한 번 고른 건 기억합니다.</p><div id="swBody"></div>
       <div class="actions"><button class="btn" id="swNo">취소</button><button class="btn primary" id="swOk">모두 적용</button></div>`, (bg) => {
       draw(bg);
       $('#swOk', bg).onclick = async () => {
