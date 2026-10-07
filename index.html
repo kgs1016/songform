@@ -138,6 +138,10 @@
   .chip-empty { color: var(--muted); font-size: 14px; padding: 6px 4px; }
   .chip-tools { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .chip-tools .btn { flex: 1; min-width: 56px; }
+  .form-selection { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .form-selection .selection-count { flex: 1; color: var(--muted); font-size: 14px; }
+  .chips.selecting .chip { min-height: 44px; height: auto; padding-top: 8px; padding-bottom: 8px; }
+  .chip-check { display: inline-block; width: 16px; margin-right: 4px; }
 
   .blocks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .blocks button {
@@ -1116,10 +1120,15 @@ function restoreEdit(from, to) {
   Object.assign(ed.song, item.song, { id, lastExport, exportBaseName });
   if (ed.entry) ed.entry.form = item.form;
   ed.page = Math.min(item.page, Math.max(0, ed.song.sheets.length - 1));
-  ed.selChip = null; saveSong(ed.song); render();
+  ed.selChip = null; resetChipSelection(); saveSong(ed.song); render();
+}
+function resetChipSelection() {
+  const ed = state.edit; if (!ed) return;
+  ed.multiSelect = false; ed.selectedChips = new Set();
 }
 function setForm(text) {
   rememberEdit();
+  resetChipSelection();
   const e = state.edit;
   const song = e.song;
   if (e.entry) e.entry.form = text;
@@ -1263,15 +1272,18 @@ function viewSong(v) {
        <button class="btn" data-act="navSong" data-dir="1" ${idx >= week.songs.length - 1 ? 'disabled' : ''}>다음 ›</button>`
     : `<button class="btn" data-act="back">보관함으로</button>`;
   if (!state.edit || state.edit.song !== song) {
-    state.edit = { song, week, entry, page: 0, mode: 'scroll', labelText: 'V', selected: null, more: false, selChip: null, boxes: null };
+    state.edit = { song, week, entry, page: 0, mode: 'scroll', labelText: 'V', selected: null, more: false, selChip: null, multiSelect: false, selectedChips: new Set(), boxes: null };
   }
   const ed = state.edit;
   ed.dragPreview = null; ed.selected = null;
   const form = currentForm();
   const blocks = parseForm(form);
   const pages = song.sheets.map((_, i) => `<button class="${i === ed.page ? 'on' : ''}" data-act="page" data-i="${i}">${i + 1}장</button>`).join('');
-  const chips = blocks.map((b, i) => `<button class="chip ${isInst(b.name) ? 'r' : ''} ${ed.selChip === i ? 'on' : ''}" data-act="selChip" data-i="${i}">${h(b.name)}${b.repeat > 1 ? `<span class="rep">×${b.repeat}</span>` : ''}${b.note ? `<span class="rep">(${h(b.note)})</span>` : ''}</button>`).join('');
-  const sel = ed.selChip !== null && blocks[ed.selChip] ? blocks[ed.selChip] : null;
+  const chips = blocks.map((b, i) => {
+    const selected = ed.multiSelect ? ed.selectedChips.has(i) : ed.selChip === i;
+    return `<button class="chip ${isInst(b.name) ? 'r' : ''} ${selected ? 'on' : ''}" data-act="selChip" data-i="${i}" aria-pressed="${selected}" aria-label="${i + 1}번째 구간 ${h(b.name)}${b.repeat > 1 ? ` ${b.repeat}회 반복` : ''}${b.note ? ` ${h(b.note)}` : ''}">${ed.multiSelect ? `<span class="chip-check" aria-hidden="true">${selected ? '☑' : '☐'}</span>` : ''}${h(b.name)}${b.repeat > 1 ? `<span class="rep">×${b.repeat}</span>` : ''}${b.note ? `<span class="rep">(${h(b.note)})</span>` : ''}</button>`;
+  }).join('');
+  const sel = !ed.multiSelect && ed.selChip !== null && blocks[ed.selChip] ? blocks[ed.selChip] : null;
   const blockBtn = ([name, ko]) => `<button class="${isInst(name) ? 'r' : ''}" data-act="addBlock" data-name="${h(name)}"><b>${h(name)}</b><span>${ko}</span></button>`;
 
   return `
@@ -1319,7 +1331,14 @@ function viewSong(v) {
           <button class="btn sm" data-act="browseForms">이전 송폼 가져오기</button>
         </div>
         <h3>송폼 <span class="right">${fmtDur(estimateSecs(form, song.tempo))}</span></h3>
-        <div class="chips">${chips || '<div class="chip-empty">아래 버튼을 눌러 순서대로 넣으세요. 예) Intro → V1 → C → V2 → C → outro</div>'}</div>
+        <div class="form-selection">
+          <button class="btn sm" data-act="toggleChipSelection" aria-pressed="${ed.multiSelect}" ${blocks.length ? '' : 'disabled'}>${ed.multiSelect ? '선택 끝내기' : '여러 개 선택'}</button>
+          ${ed.multiSelect ? `<span class="selection-count" role="status">${ed.selectedChips.size}개 선택</span>
+          <button class="btn sm" data-act="selectAllChips">${ed.selectedChips.size === blocks.length ? '전체 선택 해제' : '전체 선택'}</button>` : ''}
+        </div>
+        ${ed.multiSelect ? '<p class="small muted">지울 구간을 눌러 선택하세요. 삭제 후 실행 취소로 되돌릴 수 있어요.</p>' : ''}
+        <div class="chips ${ed.multiSelect ? 'selecting' : ''}">${chips || '<div class="chip-empty">아래 버튼을 눌러 순서대로 넣으세요. 예) Intro → V1 → C → V2 → C → outro</div>'}</div>
+        ${ed.multiSelect ? `<div class="chip-tools"><button class="btn sm danger" data-act="deleteSelectedChips" ${ed.selectedChips.size ? '' : 'disabled'}>선택한 ${ed.selectedChips.size}개 삭제</button></div>` : ''}
         ${sel ? `<div class="chip-tools">
           <button class="btn sm" data-act="chipMove" data-dir="-1" ${ed.selChip === 0 ? 'disabled' : ''}>◀</button>
           <button class="btn sm" data-act="chipMove" data-dir="1" ${ed.selChip === blocks.length - 1 ? 'disabled' : ''}>▶</button>
@@ -1831,7 +1850,34 @@ const ACTIONS = {
     setForm(serializeForm(blocks)); state.edit.selChip = blocks.length - 1; render();
   },
   moreBlocks: () => { state.edit.more = true; render(); },
-  selChip: (el) => { const i = +el.dataset.i; state.edit.selChip = state.edit.selChip === i ? null : i; render(); },
+  toggleChipSelection: () => {
+    const ed = state.edit;
+    const enabled = !ed.multiSelect && parseForm(currentForm()).length > 0;
+    resetChipSelection(); ed.multiSelect = enabled; ed.selChip = null;
+    render(); $('[data-act=toggleChipSelection]')?.focus({ preventScroll: true });
+  },
+  selectAllChips: () => {
+    const ed = state.edit; if (!ed.multiSelect) return;
+    const blocks = parseForm(currentForm());
+    ed.selectedChips = ed.selectedChips.size === blocks.length ? new Set() : new Set(blocks.map((_, i) => i));
+    render(); $('[data-act=selectAllChips]')?.focus({ preventScroll: true });
+  },
+  deleteSelectedChips: () => {
+    const ed = state.edit; if (!ed.multiSelect || !ed.selectedChips.size) return;
+    const blocks = parseForm(currentForm());
+    const remaining = blocks.filter((_, i) => !ed.selectedChips.has(i));
+    const count = blocks.length - remaining.length; if (!count) return;
+    setForm(serializeForm(remaining)); ed.selChip = null; render();
+    $('[data-act=undoEdit]')?.focus({ preventScroll: true });
+    toast(`${count}개 구간을 지웠어요. 실행 취소로 되돌릴 수 있어요.`);
+  },
+  selChip: (el) => {
+    const i = +el.dataset.i, ed = state.edit;
+    if (ed.multiSelect) {
+      if (ed.selectedChips.has(i)) ed.selectedChips.delete(i); else ed.selectedChips.add(i);
+    } else ed.selChip = ed.selChip === i ? null : i;
+    render(); $(`[data-act=selChip][data-i="${i}"]`)?.focus({ preventScroll: true });
+  },
   chipMove: (el) => {
     const ed = state.edit; const blocks = parseForm(currentForm()); const i = ed.selChip, j = i + +el.dataset.dir;
     if (j < 0 || j >= blocks.length) return;
